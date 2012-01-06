@@ -1,0 +1,8 @@
+gst-plugins-ext0.10 (0.1.5-1) unstable; urgency=low
+
+  * Initial Release
+  * Git: pkgs/g/gst-plugins-ext0.10
+  * Tag: gst-plugins-ext0.10_0.1.5-1
+
+ -- Sangchul Lee <sc11.lee@samsung.com>  Wed, 07 Dec 2011 12:40:00 +0900
+
