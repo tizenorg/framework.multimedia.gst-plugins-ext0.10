@@ -511,7 +511,6 @@ gst_avsysaudiosink_init (GstAvsysAudioSink * avsysaudiosink, GstAvsysAudioSinkCl
 	avsysaudiosink->latency = DEFAULT_AUDIO_LATENCY;
 	avsysaudiosink->audio_route_policy = DEFAULT_AUDIO_ROUTE;
 	avsysaudiosink->bytes_per_sample = 1;
-	avsysaudiosink->pcm_buffer = NULL;
 #if defined (LPCM_DUMP_SUPPORT)
 	avsysaudiosink->dumpFp = NULL;
 #endif
@@ -710,30 +709,15 @@ gst_avsysaudiosink_write (GstAudioSink * asink, gpointer data, guint length)
 {
     GstAvsysAudioSink *avsys_audio = NULL;
     gint	write_len = 0;
-    guint	bufferlen = 0;
-    gpointer bufferptr = NULL;
 
     avsys_audio = GST_AVSYS_AUDIO_SINK (asink);
     GST_AVSYS_AUDIO_SINK_LOCK (asink);
 
     if(avsys_audio->audio_stream_cb == NULL)
     {
-    	if(avsys_audio->pcm_buffer != NULL)
-        {
-        	bufferlen = (avsys_audio->avsys_size <= length)? avsys_audio->avsys_size : length;
-        	memcpy(avsys_audio->pcm_buffer, data, bufferlen);
-        	bufferptr = avsys_audio->pcm_buffer;
-        }
-        else
-        {
-        	bufferlen = length;
-        	bufferptr = data;
-        }
-
-        write_len = avsys_audio_write(avsys_audio->audio_handle, bufferptr, bufferlen);
+	write_len = avsys_audio_write(avsys_audio->audio_handle, data, length);
     
 #if defined (LPCM_DUMP_SUPPORT)
-       	//fwrite(bufferptr, 1, write_len, avsys_audio->dumpFp); //This is for played data (with volume convert)
        	fwrite(data, 1, write_len, avsys_audio->dumpFp); //This is for original data (no volume convert)
 #endif
         if(write_len != length)
@@ -839,14 +823,6 @@ gst_avsysaudiosink_avsys_open(GstAvsysAudioSink *avsys_audio)
             return FALSE;
         }
 
-        avsys_audio->pcm_buffer = g_malloc(avsys_audio->avsys_size);
-        if(avsys_audio->pcm_buffer == NULL)
-        {
-        	GST_ERROR_OBJECT(avsys_audio, "Pcm Buffer allocation failed");
-        	GST_AVSYS_AUDIO_SINK_UNLOCK (avsys_audio);
-        	return FALSE;
-        }
-
         GST_LOG_OBJECT (avsys_audio, "Opened av system ");
 
         GST_AVSYS_AUDIO_SINK_UNLOCK (avsys_audio);
@@ -889,11 +865,6 @@ gst_avsysaudiosink_avsys_close(GstAvsysAudioSink *avsys_audio)
 			avsys_audio->audio_handle = (avsys_handle_t) -1;
 			GST_INFO_OBJECT(avsys_audio, "avsys_audio_close() success");
 		}
-        if(avsys_audio->pcm_buffer != NULL)
-        {
-        	g_free(avsys_audio->pcm_buffer);
-        	avsys_audio->pcm_buffer = NULL;
-        }
 
         GST_LOG_OBJECT (avsys_audio, "Closed av system ");
     }

@@ -104,7 +104,6 @@ struct _GstAvsysAudioSink {
 	GMutex						*avsys_audio_reset_lock;
 	gint						volume_type;
 	gint						sound_priority;
-	gpointer					pcm_buffer;
 	gint						bytes_per_sample;
 
 	gpointer                         cbHandle;
