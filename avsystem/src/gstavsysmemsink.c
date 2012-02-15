@@ -597,7 +597,7 @@ gst_avsysmemsink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
 		 * So, it should notice it to application through callback func.
 		 */
 		 g_signal_emit (s, gst_avsysmemsink_signals[SIGNAL_VIDEO_STREAM],
-		                    0, GST_BUFFER_MALLOCDATA (buf),
+		                    0, GST_BUFFER_DATA (buf),
 		                    s->src_width, s->src_height,
 		                    &res);
 	 }

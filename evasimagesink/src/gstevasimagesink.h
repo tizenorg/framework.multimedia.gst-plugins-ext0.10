@@ -48,20 +48,21 @@ typedef struct _GstEvasImageSinkClass GstEvasImageSinkClass;
 
 struct _GstEvasImageSink
 {
-  GstVideoSink element;
+	GstVideoSink element;
+	GstPad *sinkpad, *srcpad;
 
-  GstPad *sinkpad, *srcpad;
-
-  Evas_Object *eo;
-  Ecore_Pipe *epipe;
-  Evas_Coord w, h;
-  GstBuffer *oldbuf;
-  gboolean gl_zerocopy;
+	Evas_Object *eo;
+	Ecore_Pipe *epipe;
+	Evas_Coord w;
+	Evas_Coord h;
+	GstBuffer *oldbuf;
+	gboolean gl_zerocopy;
+	gboolean object_show;
 };
 
 struct _GstEvasImageSinkClass
 {
-  GstVideoSinkClass parent_class;
+	GstVideoSinkClass parent_class;
 };
 
 GType gst_evas_image_sink_get_type (void);
