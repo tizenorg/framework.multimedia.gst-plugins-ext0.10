@@ -5,6 +5,7 @@ Release:    2
 Group:      TO_BE/FILLED_IN
 License:    LGPLv2+
 Source0:    %{name}-%{version}.tar.gz
+Source1001: packaging/gst-plugins-ext0.10.manifest 
 BuildRequires:  pkgconfig(avsysaudio)
 BuildRequires:  pkgconfig(camsrcjpegenc)
 BuildRequires:  pkgconfig(drm-service)
@@ -24,6 +25,7 @@ GStreamer extra plugins (common)
 
 
 %build
+cp %{SOURCE1001} .
 export CFLAGS+=" -DGST_EXT_TIME_ANALYSIS -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" "
 
 ./autogen.sh --disable-static
@@ -37,5 +39,6 @@ rm -rf %{buildroot}
 
 
 %files
+%manifest gst-plugins-ext0.10.manifest
 %defattr(-,root,root,-)
 %{_libdir}/gstreamer-0.10/*.so
