@@ -37,7 +37,7 @@ plugin_init (GstPlugin *plugin)
 	gboolean error;
 	/*register the exact name you can find in the framework*/
 	error = gst_element_register (plugin, "avsysaudiosink",
-								  GST_RANK_NONE,
+								  GST_RANK_PRIMARY + 100,
 								  GST_TYPE_AVSYS_AUDIO_SINK);
 
 	error = gst_element_register (plugin, "avsysmemsink",

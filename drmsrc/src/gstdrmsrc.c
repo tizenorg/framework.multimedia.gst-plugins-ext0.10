@@ -26,7 +26,6 @@
 #endif
 #include "gstdrmsrc.h"
 
-
 #define LOG_TRACE(message)  //g_print("DRM_SRC: %s: %d: %s - %s \n", __FILE__, __LINE__, __FUNCTION__, message);
 
 #define GST_TAG_PLAYREADY "playready_file_path"
@@ -41,8 +40,7 @@ enum
 {
 	ARG_0,
 	ARG_LOCATION,
-	ARG_FD,
-	IS_DRM
+	ARG_FD
 };
 static void gst_drm_src_finalize (GObject * object);
 static void gst_drm_src_set_property (GObject * object, guint prop_id, const GValue * value, GParamSpec * pspec);
@@ -53,6 +51,7 @@ static gboolean gst_drm_src_is_seekable (GstBaseSrc * src);
 static gboolean gst_drm_src_get_size (GstBaseSrc * src, guint64 * size);
 static GstFlowReturn gst_drm_src_create (GstBaseSrc * src, guint64 offset, guint length, GstBuffer ** buffer);
 static void gst_drm_src_uri_handler_init (gpointer g_iface, gpointer iface_data);
+
 /**
  * This function does the following:
  *  1. Initializes GstDrmSrc ( defines gst_drm_get_type)
@@ -123,9 +122,7 @@ static void gst_drm_src_class_init (GstDrmSrcClass * klass)
 	g_object_class_install_property (gobject_class, ARG_LOCATION,
 		g_param_spec_string ("location", "File Location",
 		"Location of the file to read", NULL, G_PARAM_READWRITE));
-	g_object_class_install_property (gobject_class, IS_DRM,
-		g_param_spec_boolean ("is-drm", "whether selected file type is drm or not",
-		"true, false", FALSE, G_PARAM_READWRITE));	
+
 	// 2. Assigns the function pointers GObject class attributes
 	gobject_class->finalize = GST_DEBUG_FUNCPTR (gst_drm_src_finalize);
 	gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_drm_src_start);
@@ -157,11 +154,7 @@ static void gst_drm_src_init (GstDrmSrc * src, GstDrmSrcClass * g_class)
 	src->fd = 0;
 	src->uri = NULL;
 	src->is_regular = FALSE;
-	src->drm_file = FALSE;
 	src->seekable = FALSE;
-	src->hfile = NULL;
-	src->event_posted = FALSE;
-	src->is_playready = FALSE;
 	PROFILE_INIT;
 }
 /**
@@ -283,93 +276,12 @@ static void gst_drm_src_get_property (GObject * object, guint prop_id, GValue * 
 		case ARG_FD:
 			g_value_set_int (value, src->fd);
 			break;
-		case IS_DRM:
-			g_value_set_boolean(value, src->drm_file);
-			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
 	}
 }
-/**
- * This function does the following:
- *  1. Seeks to the specified position for DRM file.
- *  2. Allocates a buffer to push the data for DRM file.
- *  3. Reads from the file and sets the related params for DRM file.
- *
- * @param   i_pDrmSrc    [in]   GstDrmSrc Structure
- * @param   i_uiOffset    [in]   offset of the file to seek
- * @param   length    [in]   size of the data in bytes
- * @param   o_pBbuffer    [out]   GstBuffer to hold the contents
- *
- * @return  GstFlowReturn   Returns GST_FLOW_OK on success and ERROR on failure
- */
-static GstFlowReturn  gst_drm_src_create_read_drm_file (GstDrmSrc* i_pDrmSrc, guint64 i_uiOffset, guint length, GstBuffer ** o_pBbuffer)
-{
-	GstBuffer *buf = NULL;
-	unsigned int readSize;
-	DRM_RESULT in_res = DRM_RESULT_SUCCESS;
-PROFILE_FUNC_BEGIN;
-	// 1. Seeks to the specified position for DRM file.
-	if (G_UNLIKELY (i_pDrmSrc->read_position != i_uiOffset))
-	{
-		in_res =drm_svc_seek_file(i_pDrmSrc->hfile, i_uiOffset, DRM_SEEK_SET);
 
-		if(in_res  != DRM_RESULT_SUCCESS)
-			goto FAILED;
-
-		i_pDrmSrc->read_position = i_uiOffset;
-	}
-	// 2. Allocates a buffer to push the data for DRM file.
-	buf = gst_buffer_new_and_alloc (length);
-	if(buf == NULL)
-	{
-		LOG_TRACE("Exit on error");
-		return GST_FLOW_ERROR;
-	}
-	// 3. Reads from the file and sets the related params for DRM file.
-	in_res = drm_svc_read_file(i_pDrmSrc->hfile, GST_BUFFER_DATA(buf), length, &readSize);
-
-	if (in_res != DRM_RESULT_SUCCESS)
-		goto FAILED;
-
-	if(readSize <= 0)
-	{
-		LOG_TRACE("Exit on error");
-		return GST_FLOW_ERROR;
-	}
-
-	#if 0 // Drm service can give lesser size block than requested thing.
-	if (G_UNLIKELY ((guint) readSize < length && i_pDrmSrc->seekable))
-	{
-		GST_ELEMENT_ERROR (i_pDrmSrc, RESOURCE, READ, (NULL),("unexpected end of file."));
-		gst_buffer_unref (buf);
-		return GST_FLOW_ERROR;
-	}
-	#endif
-
-	if (G_UNLIKELY (readSize == 0 && length > 0))
-	{
-		GST_DEBUG ("non-regular file hits EOS");
-		gst_buffer_unref (buf);
-		return GST_FLOW_UNEXPECTED;
-	}
-	length = readSize;
-	GST_BUFFER_SIZE (buf) = length;
-	GST_BUFFER_OFFSET (buf) = i_uiOffset;
-	GST_BUFFER_OFFSET_END (buf) = i_uiOffset + length;
-	*o_pBbuffer = buf;
-	i_pDrmSrc->read_position += length;
-PROFILE_FUNC_END;
-
-	return GST_FLOW_OK;
-
-FAILED:
-	{
-		GST_ELEMENT_ERROR (i_pDrmSrc, RESOURCE, READ, (NULL), GST_ERROR_SYSTEM);
-		return GST_FLOW_ERROR;
-	}
-}
 /**
  * This function does the following:
  *  1. Seeks to the specified position.
@@ -444,23 +356,8 @@ static GstFlowReturn gst_drm_src_create (GstBaseSrc * basesrc, guint64 offset, g
 {
 	GstDrmSrc *src = GST_DRM_SRC (basesrc);
 
-	if (src->is_playready && src->event_posted == FALSE) {
-		GstTagList *tags = NULL;
-		GST_DEBUG_OBJECT (src, "posting playready tags");
-		tags =  gst_tag_list_new_full (GST_TAG_PLAYREADY, src->filename, NULL);
-		if (tags) {
-			GstPad* src_pad = gst_element_get_static_pad (src, "src");
-			if (src_pad) {
-				src->event_posted = gst_pad_push_event (src_pad, gst_event_new_tag (tags) );
-				GST_DEBUG_OBJECT (src, "posting tags returns [%d]", src->event_posted);
-				gst_object_unref (src_pad);
-			}
-		}
-	}
-
 	// 1. Calls DRM file read chain method for drm files.
-	if(src->drm_file == TRUE)
-		return gst_drm_src_create_read_drm_file (src, offset, length, buffer);
+
 	// 2. Calls normal file read chain method for standard files.
 	return gst_drm_src_create_read (src, offset, length, buffer);
 }
@@ -488,21 +385,11 @@ static gboolean gst_drm_src_is_seekable (GstBaseSrc * basesrc)
 static gboolean gst_drm_src_get_size (GstBaseSrc * basesrc, guint64 * size)
 {
 	struct stat stat_results;
-	GstDrmSrc *src;
-	src = GST_DRM_SRC (basesrc);
+	GstDrmSrc *src = GST_DRM_SRC (basesrc);
+	unsigned int offset;
+
 	//  1. Gets the filesize for drm file by using seek oprations
-	if(src->drm_file==TRUE)
-	{
-		drm_svc_seek_file(src->hfile, 0, DRM_SEEK_END);
-		*size = drm_svc_tell_file(src->hfile);
-		drm_svc_seek_file(src->hfile, 0, DRM_SEEK_SET);
-		src->read_position = 0;
-		return TRUE;
-	}
-	if (!src->seekable)
-	{
-		return FALSE;
-	}
+
 	// 2. Gets the file size for standard file by using statistics
 	if (fstat (src->fd, &stat_results) < 0)
 		return FALSE;
@@ -513,10 +400,6 @@ static gboolean gst_drm_src_get_size (GstBaseSrc * basesrc, guint64 * size)
  * This function does the following:
  *  1. Checks the filename
  *  2. Opens the file and check statistics of the file
- *  3. Checks whether DRM file or not.
- *  4. Checks the DRM file type (supports only for OMA) if it is DRM
- *  5. Opens the DRM file if it is DRM
- *  6. Gets the DRM_FILE_HANDLE and sets the drm, seekable and regular flag.
  *  7. Checks the seeking for standard files
  *
  * @param   basesrc    [in]   BaseSrc Structure
@@ -527,9 +410,6 @@ static gboolean gst_drm_src_start (GstBaseSrc * basesrc)
 {
 	GstDrmSrc *src = GST_DRM_SRC (basesrc);
 	struct stat stat_results;
-	DRM_BOOL res = DRM_TRUE;
-	DRM_FILE_TYPE type = DRM_FILE_TYPE_NONE;
-	DRM_RESULT in_res = DRM_RESULT_SUCCESS;
 	off_t ret;
 PROFILE_FUNC_BEGIN;
 	// 1. Checks the filename
@@ -570,62 +450,12 @@ PROFILE_FUNC_BEGIN;
 		return FALSE;
 	}
 	src->read_position = 0;
-	/* DRM Related code */
-	// 3. Checks whether DRM file or not.
-PROFILE_BLOCK_BEGIN("drmstart");
-	res = drm_svc_is_drm_file(src->filename);
-	if(res == DRM_TRUE)
-		type = drm_svc_get_drm_type(src->filename);
-	GST_LOG_OBJECT (src, "is_drm=[%d], drm_type=[%d]", res, type);
-
-	/* We handles as DRM file if it is drm with OMA type */
-	if(res == DRM_TRUE && type == DRM_FILE_TYPE_OMA)
-	{
-#if 0 // Do not check here.
-		// 4. Checks the DRM file type (supports only for OMA) if it is DRM
-		if(drm_svc_get_drm_type(src->filename) != DRM_FILE_TYPE_OMA)
-		{
-			GST_ELEMENT_ERROR (src, RESOURCE, OPEN_READ, ("File \"%s\" is not OMA DRM.", src->filename), (NULL));
-			return FALSE;
-		}
-#endif
-
-		// 5. Opens the DRM file if it is DRM
-		PROFILE_BLOCK_BEGIN("drmopen");
-		in_res=drm_svc_open_file(src->filename, DRM_PERMISSION_PLAY, &(src->hfile));
-		if(in_res != DRM_RESULT_SUCCESS)
-		{
-			GST_ELEMENT_ERROR (src, RESOURCE, OPEN_READ, ("File \"%s\" open fail.", src->filename), (NULL));
-			return FALSE;
-		}
-		PROFILE_BLOCK_END("drmopen");
-
-		// 6. Gets the DRM_FILE_HANDLE and sets the drm, seekable and regular flags.
-		res = drm_svc_is_drm_file_handle(src->hfile);
-		if(res == DRM_TRUE)
-		{
-			drm_svc_seek_file(src->hfile, 0, DRM_SEEK_END);
-			drm_svc_seek_file(src->hfile, 0, DRM_SEEK_SET);
-		}
-		src->seekable	= TRUE;
-		src->is_regular = TRUE;
-		src->drm_file	= TRUE;
-PROFILE_BLOCK_END("drmstart");
-
-		LOG_TRACE("Exit");
-		return TRUE;
-	}
-
-	if(res == DRM_TRUE && type == DRM_FILE_TYPE_PLAYREADY) {
-		src->is_playready = TRUE;
-		src->event_posted = FALSE;
-	}
 
 	// 7. Checks the seeking for standard files
 	if (S_ISREG (stat_results.st_mode))
 		src->is_regular = TRUE;
 	ret = lseek (src->fd, 0, SEEK_END);
-	if (res < 0)
+	if (ret < 0)
 	{
 		GST_LOG_OBJECT (src, "disabling seeking, not in mmap mode and lseek "
 			"failed: %s", g_strerror (errno));
@@ -652,17 +482,11 @@ static gboolean gst_drm_src_stop (GstBaseSrc * basesrc)
 {
 	GstDrmSrc *src = GST_DRM_SRC (basesrc);
 
-	if (src->hfile) {
-		drm_svc_close_file(src->hfile);
-		src->hfile = NULL;
-	}
 	// 1. Closes the file desciptor and resets the flags
 	if(src->fd > 0)
 		close (src->fd);
 	src->fd = 0;
 	src->is_regular = FALSE;
-	src->event_posted = FALSE;
-	src->is_playready = FALSE;
 //	PROFILE_SHOW_RESULT;
 	return TRUE;
 }

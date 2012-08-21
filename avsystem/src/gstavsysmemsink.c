@@ -69,13 +69,18 @@ static GstStaticPadTemplate sink_factory =
                                 GST_PAD_SINK, GST_PAD_ALWAYS, 
                                 GST_STATIC_CAPS (
                                     "video/x-raw-yuv, "
+				    "format = (fourcc){YV12}, "
                                     "framerate = (fraction) [ 0, MAX ], "
                                     "width = (int) [ 1, MAX ], "
-                                    "height = (int) [ 1, MAX ], "
-                                    "format = (fourcc) {YV12};"
-					    			"video/x-raw-rgb,"
-                                    "bpp = (int)32,"
-                                    "depth = (int)24")
+                                    "height = (int) [ 1, MAX ]; "
+				    "video/x-raw-yuv, "
+				    "format = (fourcc){I420}, "
+                                    "framerate = (fraction) [ 0, MAX ], "
+                                    "width = (int) [ 1, MAX ], "
+                                    "height = (int) [ 1, MAX ]; "
+				    "video/x-raw-rgb, "
+                                    "bpp = (int)32, "
+                                    "depth = (int)24 ")
                             );
 
 static GstElementDetails AvsysMemSink_details = {

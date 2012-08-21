@@ -226,23 +226,6 @@ static inline guint _time_to_sample(GstAvsysAudioSink * asink,  GstClockTime dif
 */
 
 static void
-_restore_sound_path (GstAvsysAudioSink *avsys_audio)
-{
-	avsys_audio_route_policy_t cur_policy;
-	if (avsys_audio_get_route_policy(&cur_policy) == AVSYS_STATE_SUCCESS) {
-		GST_ERROR ("audio policy = %d, cur policy = %d", avsys_audio->audio_route_policy, cur_policy);
-
-		if(AVSYS_FAIL(avsys_audio_set_path_ex(AVSYS_AUDIO_GAIN_EX_KEYTONE, AVSYS_AUDIO_PATH_EX_SPK, AVSYS_AUDIO_PATH_EX_NONE,
-				(cur_policy == AVSYS_AUDIO_ROUTE_POLICY_HANDSET_ONLY)? AVSYS_AUDIO_PATH_OPTION_NONE : AVSYS_AUDIO_PATH_OPTION_JACK_AUTO))) {
-			GST_ERROR_OBJECT(avsys_audio, "audio route set to current policy failed");
-
-		}
-	} else {
-		GST_ERROR ("avsys_audio_get_route_policy() failed");
-	}
-}
-
-static void
 gst_avsysaudiosink_finalise (GObject * object)
 {
     GstAvsysAudioSink *sink = NULL;
@@ -252,10 +235,6 @@ gst_avsysaudiosink_finalise (GObject * object)
     g_mutex_free (sink->avsys_audio_lock);
     g_mutex_free (sink->avsys_audio_reset_lock);
 
-    /* restore to default path */
-    if (sink->audio_route_policy == AVSYSAUDIOSINK_AUDIOROUTE_PLAYBACK_ALERT) {
-		_restore_sound_path (sink);
-    }
     G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
@@ -415,27 +394,6 @@ gst_avsysaudiosink_set_property (GObject * object, guint prop_id,
   		{
   		case AVSYSAUDIOSINK_AUDIOROUTE_USE_EXTERNAL_SETTING:
   			GST_INFO_OBJECT(sink, "use external audio route setting");
-  			break;
-  		case AVSYSAUDIOSINK_AUDIOROUTE_PLAYBACK_NORMAL:
-  			if(AVSYS_FAIL(avsys_audio_set_path_ex(AVSYS_AUDIO_GAIN_EX_AUDIOPLAYER, AVSYS_AUDIO_PATH_EX_SPK,
-  					AVSYS_AUDIO_PATH_EX_NONE, AVSYS_AUDIO_PATH_OPTION_JACK_AUTO)))
-  			{
-  				GST_ERROR_OBJECT(sink, "audio route set to normal failed");
-  			}
-  			break;
-  		case AVSYSAUDIOSINK_AUDIOROUTE_PLAYBACK_ALERT:
-  			if(AVSYS_FAIL(avsys_audio_set_path_ex(AVSYS_AUDIO_GAIN_EX_AUDIOPLAYER, AVSYS_AUDIO_PATH_EX_SPK,
-  					AVSYS_AUDIO_PATH_EX_NONE, AVSYS_AUDIO_PATH_OPTION_DUAL_OUT)))
-  			{
-  				GST_ERROR_OBJECT(sink, "audio route set to dual output failed");
-  			}
-  			break;
-  		case AVSYSAUDIOSINK_AUDIOROUTE_PLAYBACK_HEADSET_ONLY:
-  			if(AVSYS_FAIL(avsys_audio_set_path_ex(AVSYS_AUDIO_GAIN_EX_AUDIOPLAYER, AVSYS_AUDIO_PATH_EX_HEADSET,
-  					AVSYS_AUDIO_PATH_EX_NONE, AVSYS_AUDIO_PATH_OPTION_NONE)))
-  			{
-  				GST_ERROR_OBJECT(sink, "audio route set to headset failed");
-  			}
   			break;
   		default:
   			g_print("AVSYSAUDIOSINK :: Unknown audio route option %d\n", sink->audio_route_policy);
@@ -612,7 +570,7 @@ avsysaudiosink_parse_spec (GstAvsysAudioSink * avsys_audio, GstRingBufferSpec * 
     /* set software volume table type */
     avsys_audio->audio_param.vol_type = avsys_audio->volume_type;
     avsys_audio->audio_param.priority = avsys_audio->sound_priority;
-	avsys_audio->audio_param.bluetooth = avsys_audio->user_route_policy;
+    avsys_audio->audio_param.handle_route = avsys_audio->user_route_policy;
 
     return TRUE;
 }
@@ -905,30 +863,6 @@ gst_avsyssudiosink_change_state (GstElement *element, GstStateChange transition)
       		case AVSYSAUDIOSINK_AUDIOROUTE_USE_EXTERNAL_SETTING:
       			GST_INFO_OBJECT(avsys_audio, "audio route uses external setting");
       			break;
-      		case AVSYSAUDIOSINK_AUDIOROUTE_PLAYBACK_NORMAL:
-      			if(AVSYS_FAIL(avsys_audio_set_path_ex(AVSYS_AUDIO_GAIN_EX_AUDIOPLAYER, AVSYS_AUDIO_PATH_EX_SPK,
-      					AVSYS_AUDIO_PATH_EX_NONE, AVSYS_AUDIO_PATH_OPTION_JACK_AUTO)))
-      			{
-      				GST_ERROR_OBJECT(avsys_audio, "audio route set to normal failed");
-      				return GST_STATE_CHANGE_FAILURE;
-      			}
-      			break;
-      		case AVSYSAUDIOSINK_AUDIOROUTE_PLAYBACK_ALERT:
-      			if(AVSYS_FAIL(avsys_audio_set_path_ex(AVSYS_AUDIO_GAIN_EX_AUDIOPLAYER, AVSYS_AUDIO_PATH_EX_SPK,
-      					AVSYS_AUDIO_PATH_EX_NONE, AVSYS_AUDIO_PATH_OPTION_DUAL_OUT)))
-      			{
-      				GST_ERROR_OBJECT(avsys_audio, "audio route set to dual output failed");
-      				return GST_STATE_CHANGE_FAILURE;
-      			}
-      			break;
-      		case AVSYSAUDIOSINK_AUDIOROUTE_PLAYBACK_HEADSET_ONLY:
-      			if(AVSYS_FAIL(avsys_audio_set_path_ex(AVSYS_AUDIO_GAIN_EX_AUDIOPLAYER, AVSYS_AUDIO_PATH_EX_HEADSET,
-      					AVSYS_AUDIO_PATH_EX_NONE, AVSYS_AUDIO_PATH_OPTION_NONE)))
-      			{
-      				GST_ERROR_OBJECT(avsys_audio, "audio route set to headset failed");
-      				return GST_STATE_CHANGE_FAILURE;
-      			}
-      			break;
       		default:
       			GST_ERROR_OBJECT(avsys_audio, "Unknown audio route option %d\n", avsys_audio->audio_route_policy);
       			break;
@@ -967,10 +901,6 @@ gst_avsyssudiosink_change_state (GstElement *element, GstStateChange transition)
     switch (transition)
     {
         case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-			/* restore to default path */
-			if (avsys_audio->audio_route_policy == AVSYSAUDIOSINK_AUDIOROUTE_PLAYBACK_ALERT) 	{
-				_restore_sound_path (avsys_audio);
-			}
             break;
         case GST_STATE_CHANGE_PAUSED_TO_READY:
             break;

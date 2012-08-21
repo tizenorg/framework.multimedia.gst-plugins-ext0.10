@@ -258,13 +258,6 @@ AC_ARG_ENABLE(ext-drmsrc, AC_HELP_STRING([--enable-ext-drmsrc], [using drmsrc]),
   ],
   [GST_EXT_USE_EXT_DRMSRC=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_DRMSRC, test "x$GST_EXT_USE_EXT_DRMSRC" = "xyes")
-
-if test "x$GST_EXT_USE_EXT_DRMSRC" = "xyes"; then
-	PKG_CHECK_MODULES(DRM_SERVICE, drm-service)
-	AC_SUBST(DRM_SERVICE_CFLAGS)
-	AC_SUBST(DRM_SERVICE_LIBS)
-fi	
-
 dnl use ext-toggle --------------------------------------------------------------------------
 AC_ARG_ENABLE(ext-toggle, AC_HELP_STRING([--enable-ext-toggle], [using toggle]),
   [
@@ -300,6 +293,42 @@ AC_ARG_ENABLE(ext-pdpushsrc, AC_HELP_STRING([--enable-ext-pdpushsrc], [using pdp
  ],
  [GST_EXT_USE_EXT_PD_PUSHSRC=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_PD_PUSHSRC, test "x$GST_EXT_USE_EXT_PD_PUSHSRC" = "xyes")
+dnl use ext-audiotp --------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-audiotp, AC_HELP_STRING([--enable-ext-audiotp], [using audiotp]),
+[
+ case "${enableval}" in
+	 yes) GST_EXT_USE_EXT_AUDIOTP=yes ;;
+	 no)  GST_EXT_USE_EXT_AUDIOTP=no ;;
+	 *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-audiotp) ;;
+ esac
+ ],
+ [GST_EXT_USE_EXT_AUDIOTP=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_AUDIOTP, test "x$GST_EXT_USE_EXT_AUDIOTP" = "xyes")
+
+dnl use ext-piffdemux --------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-piffdemux, AC_HELP_STRING([--enable-ext-piffdemux], [using piffdemux]),
+[
+ case "${enableval}" in
+	 yes) GST_EXT_USE_EXT_PIFFDEMUX=yes ;;
+	 no)  GST_EXT_USE_EXT_PIFFDEMUX=no ;;
+	 *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-piffdemux) ;;
+ esac
+ ],
+ [GST_EXT_USE_EXT_PIFFDEMUX=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_PIFFDEMUX, test "x$GST_EXT_USE_EXT_PIFFDEMUX" = "xyes")
+
+dnl use ext-ssdemux --------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-ssdemux, AC_HELP_STRING([--enable-ext-ssdemux], [using ssdemux]),
+[
+ case "${enableval}" in
+	 yes) GST_EXT_USE_EXT_SSDEMUX=yes ;;
+	 no)  GST_EXT_USE_EXT_SSDEMUX=no ;;
+	 *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-ssdemux) ;;
+ esac
+ ],
+ [GST_EXT_USE_EXT_SSDEMUX=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_SSDEMUX, test "x$GST_EXT_USE_EXT_SSDEMUX" = "xyes")
+
 
 AC_OUTPUT(
 Makefile
@@ -317,4 +346,10 @@ toggle/Makefile
 toggle/src/Makefile
 drmsrc/Makefile
 drmsrc/src/Makefile
+audiotp/Makefile
+audiotp/src/Makefile
+piffdemux/Makefile
+piffdemux/src/Makefile
+ssdemux/Makefile
+ssdemux/src/Makefile
 )

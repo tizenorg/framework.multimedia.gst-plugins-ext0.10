@@ -28,7 +28,6 @@
 #include <sys/types.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
-#include "drm-service.h"
 #include <stdio.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -93,11 +92,6 @@ struct _GstDrmSrc
 	guint64 read_position;	
       gboolean seekable;      
 	gboolean is_regular;    
-	gboolean drm_file;          // flag indicating drm file
-	DRM_FILE_HANDLE hfile;   // drm file handler
-
-	gboolean is_playready;
-	gboolean event_posted;
 };
 
 struct _GstDrmSrcClass 

@@ -81,6 +81,11 @@ enum {
     PROP_AUDIO_LATENCY,
 };
 
+enum {
+	CAPTURE_UNCORK = 0,
+	CAPTURE_CORK,
+};
+
 GType
 gst_avsysaudiosrc_audio_latency_get_type (void)
 {
@@ -122,6 +127,9 @@ static guint		gst_avsysaudiosrc_read		(GstAudioSrc * asrc, gpointer data, guint 
 static void		gst_avsysaudiosrc_reset		(GstAudioSrc * asrc);
 static gboolean	gst_avsysaudiosrc_avsys_close	(GstAvsysAudioSrc *src);
 static gboolean	gst_avsysaudiosrc_avsys_open	(GstAvsysAudioSrc *src);
+static gboolean	gst_avsysaudiosrc_avsys_cork	(GstAvsysAudioSrc *avsysaudiosrc, int cork);
+static gboolean	gst_avsysaudiosrc_avsys_start	(GstAvsysAudioSrc *src);
+static gboolean	gst_avsysaudiosrc_avsys_stop	(GstAvsysAudioSrc *src);
 #if defined(_USE_CAPS_)
 static GstCaps *gst_avsysaudiosrc_detect_rates (GstObject * obj, avsys_pcm_hw_params_t * hw_params, GstCaps * in_caps);
 static GstCaps *gst_avsysaudiosrc_detect_channels (GstObject * obj,avsys_pcm_hw_params_t * hw_params,  GstCaps * in_caps);
@@ -474,7 +482,6 @@ gst_avsysaudiosrc_prepare (GstAudioSrc * asrc, GstRingBufferSpec * spec)
 {
     GstAvsysAudioSrc *avsysaudiosrc = NULL;
 	guint	p_time = 0, b_time = 0;
-//	gint	avsys_result = 0;
 
 	avsysaudiosrc = GST_AVSYS_AUDIO_SRC (asrc);
 
@@ -483,7 +490,6 @@ gst_avsysaudiosrc_prepare (GstAudioSrc * asrc, GstRingBufferSpec * spec)
     	GST_ERROR("avsysaudiosrc_parse_spec failed");
         return FALSE;
     }
-    //g_print("AVSYSAUDIOSRC :: avsysaudiosrc_parse_spec() success\n");
 
 	/*open avsys audio*/
     if (!gst_avsysaudiosrc_avsys_open (avsysaudiosrc))
@@ -495,7 +501,7 @@ gst_avsysaudiosrc_prepare (GstAudioSrc * asrc, GstRingBufferSpec * spec)
     /* Ring buffer size */
     if (AVSYS_STATE_SUCCESS ==
      	avsys_audio_get_period_buffer_time(avsysaudiosrc->audio_handle, &p_time, &b_time))
-     {
+    {
      	if(p_time == 0 || b_time == 0)
      		return FALSE;
 
@@ -525,7 +531,7 @@ gst_avsysaudiosrc_unprepare (GstAudioSrc * asrc)
 
     avsysaudiosrc = GST_AVSYS_AUDIO_SRC (asrc);
 
-    /*close*/
+	/*close*/
     GST_AVSYS_AUDIO_SRC_LOCK (avsysaudiosrc);
 
     if(!gst_avsysaudiosrc_avsys_close(avsysaudiosrc))
@@ -594,6 +600,10 @@ gst_avsys_src_change_state (GstElement * element, GstStateChange transition)
 		case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
 		{
 			GST_DEBUG ("GST_STATE_CHANGE_PAUSED_TO_PLAYING\n") ;
+			/* Capture Start */
+			if (!gst_avsysaudiosrc_avsys_start (avsys)) {
+				GST_ERROR("gst_avsysaudiosrc_avsys_start failed");
+			}
 			break ;
 		}
 		default:
@@ -608,6 +618,10 @@ gst_avsys_src_change_state (GstElement * element, GstStateChange transition)
 		case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
 		{
 			GST_DEBUG ("GST_STATE_CHANGE_PLAYING_TO_PAUSED\n") ;
+			/* Capture Stop */
+			if (!gst_avsysaudiosrc_avsys_stop (avsys)) {
+				GST_ERROR("gst_avsysaudiosrc_avsys_stop failed");
+			}
 			break ;
 		}
 		case GST_STATE_CHANGE_PAUSED_TO_READY:
@@ -661,6 +675,41 @@ _READ_ERROR:
 		GST_AVSYS_AUDIO_SRC_UNLOCK (asrc);
 		return length;	/* skip one period */
 	}
+}
+
+static gboolean
+gst_avsysaudiosrc_avsys_cork (GstAvsysAudioSrc *avsysaudiosrc, int cork)
+{
+	int avsys_result = avsys_audio_cork (avsysaudiosrc->audio_handle, cork);
+	if (avsys_result != AVSYS_STATE_SUCCESS) {
+		GST_ERROR_OBJECT(avsysaudiosrc, "avsys_audio_cork() error. [0x%x]\n", avsys_result);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+static gboolean
+gst_avsysaudiosrc_avsys_start (GstAvsysAudioSrc *avsysaudiosrc)
+{
+	gboolean result;
+
+	GST_AVSYS_AUDIO_SRC_LOCK (avsysaudiosrc);
+	result = gst_avsysaudiosrc_avsys_cork(avsysaudiosrc, CAPTURE_UNCORK);
+	GST_AVSYS_AUDIO_SRC_UNLOCK (avsysaudiosrc);
+
+	return result;
+}
+
+static gboolean
+gst_avsysaudiosrc_avsys_stop (GstAvsysAudioSrc *avsysaudiosrc)
+{
+	gboolean result;
+
+	GST_AVSYS_AUDIO_SRC_LOCK (avsysaudiosrc);
+	result = gst_avsysaudiosrc_avsys_cork(avsysaudiosrc, CAPTURE_CORK);
+	GST_AVSYS_AUDIO_SRC_UNLOCK (avsysaudiosrc);
+
+	return result;
 }
 
 static gboolean

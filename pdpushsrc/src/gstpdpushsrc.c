@@ -808,7 +808,7 @@ gst_pd_pushsrc_uri_handler_init (gpointer g_iface, gpointer iface_data)
 static gboolean
 gst_pd_pushsrc_plugin_init (GstPlugin *plugin)
 {
-    if (!gst_element_register (plugin, "pdpushsrc", GST_RANK_PRIMARY, gst_pd_pushsrc_get_type()))
+    if (!gst_element_register (plugin, "pdpushsrc", GST_RANK_NONE, gst_pd_pushsrc_get_type()))
     {
         return FALSE;
     }

@@ -28,6 +28,7 @@
 #include <gst/video/gstvideosink.h>
 #include <Evas.h>
 #include <Ecore.h>
+#include <mm_ta.h>
 
 G_BEGIN_DECLS
 
@@ -49,15 +50,18 @@ typedef struct _GstEvasImageSinkClass GstEvasImageSinkClass;
 struct _GstEvasImageSink
 {
 	GstVideoSink element;
-	GstPad *sinkpad, *srcpad;
 
 	Evas_Object *eo;
 	Ecore_Pipe *epipe;
 	Evas_Coord w;
 	Evas_Coord h;
-	GstBuffer *oldbuf;
-	gboolean gl_zerocopy;
 	gboolean object_show;
+	gboolean gl_zerocopy;
+
+	GstBuffer *oldbuf;
+
+	gboolean is_evas_object_size_set;
+	guint present_data_addr;
 };
 
 struct _GstEvasImageSinkClass

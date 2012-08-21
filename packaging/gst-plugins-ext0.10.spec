@@ -1,19 +1,19 @@
+#sbs-git:slp/pkgs/g/gst-plugins-ext0.10 gst-plugins-ext0.10 0.1.7 1784a2d9c9fb90be7fe99857215c2a6154adaacb
 Name:       gst-plugins-ext0.10
-Version:    0.1.5
-Summary:    GStreamer extra plugins (common) Version:    1.0
-Release:    2
+Version:    0.2.3
+Summary:    GStreamer extra plugins (common)
+Release:    5
 Group:      TO_BE/FILLED_IN
-License:    LGPLv2+
+License:    TO BE FILLED IN
 Source0:    %{name}-%{version}.tar.gz
 BuildRequires:  pkgconfig(avsysaudio)
 BuildRequires:  pkgconfig(camsrcjpegenc)
-BuildRequires:  pkgconfig(drm-service)
 BuildRequires:  pkgconfig(ecore)
 BuildRequires:  pkgconfig(ecore-x)
 BuildRequires:  pkgconfig(evas)
 BuildRequires:  pkgconfig(mm-ta)
 BuildRequires:  pkgconfig(gstreamer-plugins-base-0.10)
-BuildRequires:  pkgconfig(gstreamer-0.10)
+BuildRequires:  pkgconfig(gstreamer-0.10)  
 BuildRequires:  pkgconfig(libexif)
 
 %description
@@ -37,5 +37,5 @@ rm -rf %{buildroot}
 
 
 %files
-%defattr(-,root,root,-)
+%defattr(-,root,root,-)  
 %{_libdir}/gstreamer-0.10/*.so

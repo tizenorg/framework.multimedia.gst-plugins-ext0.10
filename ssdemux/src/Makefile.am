@@ -3,7 +3,7 @@
 ##############################################################################
 # change libgstplugin.la to something more suitable, e.g. libmysomething.la  #
 ##############################################################################
-plugin_LTLIBRARIES = libgstdrmsrc.la
+plugin_LTLIBRARIES = libgstssdemux.la
 
 ##############################################################################
 # for the next set of variables, rename the prefix if you renamed the .la,   #
@@ -14,14 +14,13 @@ plugin_LTLIBRARIES = libgstdrmsrc.la
 ##############################################################################
 
 # sources used to compile this plug-in
-libgstdrmsrc_la_SOURCES = gstdrmsrc.c
+libgstssdemux_la_SOURCES = gstssdemux.c ssmanifestparse.c
 
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
-libgstdrmsrc_la_CFLAGS = $(GST_CFLAGS) $(MMTA_CFLAGS) -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
-libgstdrmsrc_la_LIBADD = $(GST_LIBS) $(GST_BASE_LIBS) $(MMTA_LIBS)
-libgstdrmsrc_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
+libgstssdemux_la_CFLAGS = $(GST_CFLAGS) $(GST_BASE_CFLAGS) $(SOUP_CFLAGS) $(XML2_CFLAGS) $(GST_APP_CFLAGS) -I$(srcdir)/../../piffdemux/src
+libgstssdemux_la_LIBADD = $(GST_LIBS) $(GST_BASE_LIBS) $(SOUP_LIBS) $(XML2_LIBS) $(GST_APP_LIBS) -lgstapp-0.10
+libgstssdemux_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
 
 # headers we need but don't want installed
-noinst_HEADERS = gstdrmsrc.h
-
+noinst_HEADERS = gstssdemux.h ssmanifestparse.h
