@@ -305,18 +305,6 @@ AC_ARG_ENABLE(ext-audiotp, AC_HELP_STRING([--enable-ext-audiotp], [using audiotp
  [GST_EXT_USE_EXT_AUDIOTP=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_AUDIOTP, test "x$GST_EXT_USE_EXT_AUDIOTP" = "xyes")
 
-dnl use ext-piffdemux --------------------------------------------------------------------------
-AC_ARG_ENABLE(ext-piffdemux, AC_HELP_STRING([--enable-ext-piffdemux], [using piffdemux]),
-[
- case "${enableval}" in
-	 yes) GST_EXT_USE_EXT_PIFFDEMUX=yes ;;
-	 no)  GST_EXT_USE_EXT_PIFFDEMUX=no ;;
-	 *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-piffdemux) ;;
- esac
- ],
- [GST_EXT_USE_EXT_PIFFDEMUX=yes])
-AM_CONDITIONAL(GST_EXT_USE_EXT_PIFFDEMUX, test "x$GST_EXT_USE_EXT_PIFFDEMUX" = "xyes")
-
 dnl use ext-ssdemux --------------------------------------------------------------------------
 AC_ARG_ENABLE(ext-ssdemux, AC_HELP_STRING([--enable-ext-ssdemux], [using ssdemux]),
 [
@@ -348,8 +336,6 @@ drmsrc/Makefile
 drmsrc/src/Makefile
 audiotp/Makefile
 audiotp/src/Makefile
-piffdemux/Makefile
-piffdemux/src/Makefile
 ssdemux/Makefile
 ssdemux/src/Makefile
 )

@@ -5,10 +5,6 @@ aclocaldir = $(datadir)/aclocal
 
 SUBDIRS = common
 
-if GST_EXT_USE_EXT_PIFFDEMUX
-#SUBDIRS += piffdemux
-endif
-
 if GST_EXT_USE_EXT_ENCODEBIN
 SUBDIRS += encodebin
 endif
@@ -44,10 +40,6 @@ endif
 
 
 DIST_SUBDIRS = common
-
-if GST_EXT_USE_EXT_PIFFDEMUX
-#DIST_SUBDIRS += piffdemux
-endif
 
 if GST_EXT_USE_EXT_ENCODEBIN
 DIST_SUBDIRS += encodebin
