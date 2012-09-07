@@ -48,6 +48,8 @@
 
 #define GST_CAT_DEFAULT avsysmemsink_debug
 
+#define DISABLE_YUV_FORMAT_ON_SINK_CAPS
+
 GST_DEBUG_CATEGORY_STATIC (avsysmemsink_debug);
 
 enum 
@@ -64,24 +66,39 @@ enum
 	PROP_ROTATE,
 };
 
-static GstStaticPadTemplate sink_factory = 
-        GST_STATIC_PAD_TEMPLATE ("sink",
-                                GST_PAD_SINK, GST_PAD_ALWAYS, 
-                                GST_STATIC_CAPS (
-                                    "video/x-raw-yuv, "
-				    "format = (fourcc){YV12}, "
-                                    "framerate = (fraction) [ 0, MAX ], "
-                                    "width = (int) [ 1, MAX ], "
-                                    "height = (int) [ 1, MAX ]; "
-				    "video/x-raw-yuv, "
-				    "format = (fourcc){I420}, "
-                                    "framerate = (fraction) [ 0, MAX ], "
-                                    "width = (int) [ 1, MAX ], "
-                                    "height = (int) [ 1, MAX ]; "
-				    "video/x-raw-rgb, "
-                                    "bpp = (int)32, "
-                                    "depth = (int)24 ")
-                            );
+static GstStaticPadTemplate sink_factory =
+	GST_STATIC_PAD_TEMPLATE ("sink",
+		GST_PAD_SINK, GST_PAD_ALWAYS,
+		GST_STATIC_CAPS (
+#ifndef DISABLE_YUV_FORMAT_ON_SINK_CAPS
+			"video/x-raw-yuv, "
+			"format = (fourcc){YV12}, "
+			"framerate = (fraction) [ 0, MAX ], "
+			"width = (int) [ 1, MAX ], "
+			"height = (int) [ 1, MAX ]; "
+			"video/x-raw-yuv, "
+			"format = (fourcc){I420}, "
+			"framerate = (fraction) [ 0, MAX ], "
+			"width = (int) [ 1, MAX ], "
+			"height = (int) [ 1, MAX ]; "
+			"video/x-raw-rgb, "
+			"bpp = (int)32, "
+			"depth = (int)24; "
+#else /* BGRA */
+			"video/x-raw-rgb, "
+			"bpp = (int)32, "
+			"depth = (int)32, "
+			"endianness = (int)4321, "
+			"red_mask = (int)65280, "
+			"green_mask = (int)16711680, "
+			"blue_mask = (int)-16777216, "
+			"alpha_mask = (int)255, "
+			"width = (int) [ 1, MAX ], "
+			"height = (int) [ 1, MAX ], "
+			"framerate = (fraction) [ 0, MAX ]; "
+#endif
+		)
+	);
 
 static GstElementDetails AvsysMemSink_details = {
             "AV-system Stream callback",
@@ -125,6 +142,8 @@ yuv420toargb(unsigned char *src, unsigned char *dst, int width, int height)
     unsigned char 	*pY;
     unsigned char 	*pU;
     unsigned char 	*pV;
+
+    GST_DEBUG ("converting yuv420 to argb");
 
     pY = src ;
     pU = src + (width * height) ;
@@ -444,7 +463,7 @@ gst_avsysmemsink_set_caps (GstBaseSink * bs, GstCaps * caps)
 
         /**/
         name = (char *) gst_structure_get_name (structure);
-        debug_msg ("CAPS NAME: %s\n", name);
+        GST_DEBUG_OBJECT (s, "CAPS NAME: %s", name);
 
 		if (gst_structure_has_name (structure, "video/x-raw-rgb"))
 		{
@@ -538,6 +557,7 @@ gst_avsysmemsink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
 
 	if ( ! s->is_rgb )
 	{
+	    GST_DEBUG_OBJECT (s, "src format is not rgb");
 	    if (s->dst_changed == TRUE)
 	    {
 	        if(s->con_buf)
@@ -597,7 +617,9 @@ gst_avsysmemsink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
 	                    &res);
 	}
 	else
-	{	
+	{
+		GST_DEBUG_OBJECT (s, "src format is rgb");
+
 		/* NOTE : video can be resized by convert plugin's set caps on running time. 
 		 * So, it should notice it to application through callback func.
 		 */
@@ -606,6 +628,7 @@ gst_avsysmemsink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
 		                    s->src_width, s->src_height,
 		                    &res);
 	 }
+	 GST_DEBUG_OBJECT (s, "g_signal_emit : src_width=%d, src_height=%d, GST_BUFFER_SIZE=%d", s->src_width,s->src_height,GST_BUFFER_SIZE(buf));
 
     /*check video stream callback result.*/
     if (res) 
@@ -694,8 +717,8 @@ gst_avsysmemsink_class_init (GstAvsysMemSinkClass *klass)
 
     
     GST_DEBUG_CATEGORY_INIT (avsysmemsink_debug, 
-                            "AvsysMemSink", 
-                            0, 
+                            "avsysmemsink",
+                            0,
                             "AV system based GStreamer Plug-in");
 }
 

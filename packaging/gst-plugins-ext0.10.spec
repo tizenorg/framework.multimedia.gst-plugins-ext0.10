@@ -1,8 +1,7 @@
-#sbs-git:slp/pkgs/g/gst-plugins-ext0.10 gst-plugins-ext0.10 0.1.7 1784a2d9c9fb90be7fe99857215c2a6154adaacb
 Name:       gst-plugins-ext0.10
-Version:    0.2.3
-Summary:    GStreamer extra plugins (common)
-Release:    5
+Version:     0.2.4
+Summary:  GStreamer extra plugins (common)
+Release:    1
 Group:      TO_BE/FILLED_IN
 License:    TO BE FILLED IN
 Source0:    %{name}-%{version}.tar.gz
