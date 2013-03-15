@@ -1,7 +1,7 @@
 Name:       gst-plugins-ext0.10
-Version:    0.2.20
+Version:    0.3.0
 Summary:    GStreamer extra plugins (common)
-Release:    0
+Release:    1
 Group:      libs
 License:    LGPLv2+
 Source0:    %{name}-%{version}.tar.gz
@@ -20,8 +20,10 @@ BuildRequires:	pkgconfig(xext)
 BuildRequires:	pkgconfig(xv)
 BuildRequires:	pkgconfig(xdamage)
 BuildRequires:	pkgconfig(libdrm)
-BuildRequires:  pkgconfig(libdrm_slp)
+BuildRequires:  pkgconfig(libtbm)
 BuildRequires:	libdrm-devel
+BuildRequires:	pkgconfig(dri2proto)
+BuildRequires:	pkgconfig(xfixes)
 
 %description
 GStreamer extra plugins (common)
@@ -31,7 +33,7 @@ GStreamer extra plugins (common)
 
 
 %build
-export CFLAGS+=" -DGST_EXT_TIME_ANALYSIS -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" "
+export CFLAGS+=" -DGST_EXT_TIME_ANALYSIS -DGST_EXT_XV_ENHANCEMENT -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" "
 
 ./autogen.sh --disable-static
 %configure --disable-static

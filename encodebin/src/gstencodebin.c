@@ -78,12 +78,13 @@ g_object_set(G_OBJECT(x_queue), \
       gst_object_unref( sinkpad ); sinkpad = NULL;\
 }
 
-#define DEFAULT_PROP_PROFILE             0
-#define DEFAULT_PROP_HIGH_SPEED		0
-#define DEFAULT_PROP_VENC_NAME	"ffenc_h263"
-#define DEFAULT_PROP_AENC_NAME	"secenc_amr"
-#define DEFAULT_PROP_IENC_NAME	"jpegenc"
-#define DEFAULT_PROP_MUX_NAME	"ffmux_3gp" 
+#define DEFAULT_PROP_PROFILE            0
+#define DEFAULT_PROP_HIGH_SPEED         0
+#define DEFAULT_PROP_VENC_NAME          "ffenc_h263"
+#define DEFAULT_PROP_AENC_NAME          "secenc_amr"
+#define DEFAULT_PROP_IENC_NAME          "jpegenc"
+#define DEFAULT_PROP_MUX_NAME           "ffmux_3gp"
+#define DEFAULT_PROP_VCONV_NAME         "ffmpegcolorspace"
 
 /* props */
 enum
@@ -96,8 +97,9 @@ enum
 	//elements name
 	PROP_VENC_NAME,
 	PROP_AENC_NAME,
-	PROP_IENC_NAME, 
-	PROP_MUX_NAME, 
+	PROP_IENC_NAME,
+	PROP_MUX_NAME,
+	PROP_VCONV_NAME,
 	//caps
 	PROP_VCAPS,
 	PROP_ACAPS,
@@ -108,13 +110,14 @@ enum
 	PROP_AUTO_COLORSPACE,
 	PROP_BLOCK,
 	PROP_PAUSE,
-	PROP_VENC_QUEUE,	
+	PROP_VENC_QUEUE,
 	PROP_AENC_QUEUE,
 	//elements pointer
 	PROP_VIDEO_ENC,
 	PROP_AUDIO_ENC,
 	PROP_IMAGE_ENC,
 	PROP_MUX,
+	PROP_VIDEO_CONV,
 	//options
 	PROP_USE_VIDEO_TOGGLE,
 };
@@ -135,7 +138,8 @@ typedef enum {
 	ENCODEBIN_ELEMENT_VENC,
 	ENCODEBIN_ELEMENT_AENC,
 	ENCODEBIN_ELEMENT_IENC,
-	ENCODEBIN_ELEMENT_MUX
+	ENCODEBIN_ELEMENT_MUX,
+	ENCODEBIN_ELEMENT_VIDEO_CONV
 }GstEncodeBinElement;
 
 typedef enum {
@@ -573,7 +577,10 @@ gst_encode_bin_get_property (GObject * object,
 			break; 
 		case PROP_MUX_NAME:
 			g_value_set_string (value, encodebin->mux_name);
-			break; 
+			break;
+		case PROP_VCONV_NAME:
+			g_value_set_string (value, encodebin->vconv_name);
+			break;
 		//caps
 		case PROP_VCAPS:
 			gst_value_set_caps (value, encodebin->vcaps);
@@ -613,16 +620,16 @@ gst_encode_bin_get_property (GObject * object,
 //			g_value_set_boolean (value, encodebin->use_aenc_queue);
 			if((encodebin->audio_encode_queue == NULL) && (encodebin->profile <= GST_ENCODE_BIN_PROFILE_AUDIO)) {
 				encodebin->audio_encode_queue = gst_element_factory_make ("queue", "audio_encode_queue");
-				if(encodebin->audio_encode_queue != NULL) 
+				if(encodebin->audio_encode_queue != NULL)
 					gst_bin_add(GST_BIN(encodebin), encodebin->audio_encode_queue);
 			}
-			g_value_set_object (value, encodebin->audio_encode_queue);					
-			break;						
+			g_value_set_object (value, encodebin->audio_encode_queue);
+			break;
 		//elements pointer
 		case PROP_VIDEO_ENC:
 			if((encodebin->video_encode == NULL) && (encodebin->profile == GST_ENCODE_BIN_PROFILE_AV)) {
 				encodebin->video_encode = gst_element_factory_make (encodebin->venc_name, "video_encode");
-				if(encodebin->video_encode != NULL) 
+				if(encodebin->video_encode != NULL)
 					gst_bin_add(GST_BIN(encodebin), encodebin->video_encode);
 			}
 			g_value_set_object (value, encodebin->video_encode);
@@ -630,7 +637,7 @@ gst_encode_bin_get_property (GObject * object,
 		case PROP_AUDIO_ENC:
 			if(encodebin->audio_encode == NULL && (encodebin->profile <= GST_ENCODE_BIN_PROFILE_AUDIO)) {
 				encodebin->audio_encode = gst_element_factory_make (encodebin->aenc_name, "audio_encode");
-				if(encodebin->audio_encode != NULL) 
+				if(encodebin->audio_encode != NULL)
 					gst_bin_add(GST_BIN(encodebin), encodebin->audio_encode);
 			}
 			g_value_set_object (value, encodebin->audio_encode);
@@ -638,7 +645,7 @@ gst_encode_bin_get_property (GObject * object,
 		case PROP_IMAGE_ENC:
 			if(encodebin->image_encode == NULL && (encodebin->profile == GST_ENCODE_BIN_PROFILE_IMAGE)) {
 				encodebin->image_encode = gst_element_factory_make (encodebin->ienc_name, "image_encode");
-				if(encodebin->image_encode != NULL) 
+				if(encodebin->image_encode != NULL)
 					gst_bin_add(GST_BIN(encodebin), encodebin->image_encode);
 			}
 			g_value_set_object (value, encodebin->image_encode);
@@ -646,10 +653,18 @@ gst_encode_bin_get_property (GObject * object,
 		case PROP_MUX:
 			if(encodebin->mux == NULL && (encodebin->profile <= GST_ENCODE_BIN_PROFILE_AUDIO)) {
 				encodebin->mux = gst_element_factory_make (encodebin->mux_name, "mux");
-				if(encodebin->mux != NULL) 
+				if(encodebin->mux != NULL)
 					gst_bin_add(GST_BIN(encodebin), encodebin->mux);
 			}
 			g_value_set_object (value, encodebin->mux);
+			break;
+		case PROP_VIDEO_CONV:
+			if(encodebin->color_space == NULL && (encodebin->profile != GST_ENCODE_BIN_PROFILE_AUDIO)) {
+				encodebin->color_space = gst_element_factory_make (encodebin->vconv_name, "video_convert");
+				if(encodebin->color_space != NULL)
+					gst_bin_add(GST_BIN(encodebin), encodebin->color_space);
+			}
+			g_value_set_object (value, encodebin->color_space);
 			break;
 		case PROP_USE_VIDEO_TOGGLE:
 			g_value_set_boolean( value, encodebin->use_video_toggle );
@@ -691,13 +706,13 @@ gst_encode_bin_set_property (GObject * object,
 			new_name = g_value_get_string (value);
 
 			if(encodebin->video_encode == NULL) {
-				if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_VENC, new_name))		
+				if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_VENC, new_name))
 					encodebin->venc_name = g_strdup (new_name);
 			} else {
 				if(strcmp (encodebin->venc_name, new_name)) {
 					gst_encode_bin_remove_element(encodebin, encodebin->video_encode);
-					if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_VENC, new_name))		
-					encodebin->venc_name = g_strdup (new_name);
+					if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_VENC, new_name))
+						encodebin->venc_name = g_strdup (new_name);
 				}
 			}
 			break;
@@ -717,7 +732,7 @@ gst_encode_bin_set_property (GObject * object,
 				if(strcmp (encodebin->aenc_name, new_name)) {
 					gst_encode_bin_remove_element(encodebin, encodebin->audio_encode);
 					if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_AENC, new_name))		
-					encodebin->aenc_name = g_strdup (new_name);
+						encodebin->aenc_name = g_strdup (new_name);
 				}
 			}
 			break;
@@ -737,7 +752,7 @@ gst_encode_bin_set_property (GObject * object,
 				if(strcmp (encodebin->ienc_name, new_name)) {
 					gst_encode_bin_remove_element(encodebin, encodebin->image_encode);
 					if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_IENC, new_name))		
-					encodebin->ienc_name = g_strdup (new_name);
+						encodebin->ienc_name = g_strdup (new_name);
 				}
 			}
 			break; 
@@ -751,16 +766,36 @@ gst_encode_bin_set_property (GObject * object,
 			new_name = g_value_get_string (value);
 
 			if(encodebin->mux == NULL) {
-				if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_MUX, new_name))		
+				if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_MUX, new_name))
 					encodebin->mux_name = g_strdup (new_name);
 			} else {
 				if(strcmp (encodebin->mux_name, new_name)) {
 					gst_encode_bin_remove_element(encodebin, encodebin->mux);
-					if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_MUX, new_name))		
-					encodebin->mux_name = g_strdup (new_name);
+					if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_MUX, new_name))
+						encodebin->mux_name = g_strdup (new_name);
 				}
 			}
-			break; 
+			break;
+		}
+		case PROP_VCONV_NAME: {
+			const gchar  *new_name;
+			if (encodebin->profile == GST_ENCODE_BIN_PROFILE_AUDIO) {
+				GST_WARNING_OBJECT(encodebin, "Profile isn't match");
+				break;
+			}
+			new_name = g_value_get_string(value);
+
+			if (encodebin->color_space == NULL) {
+				if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_VIDEO_CONV, new_name))
+					encodebin->vconv_name = g_strdup (new_name);
+			} else {
+				if(strcmp (encodebin->vconv_name, new_name)) {
+					gst_encode_bin_remove_element(encodebin, encodebin->color_space);
+					if(gst_encode_bin_add_element_by_name(encodebin, ENCODEBIN_ELEMENT_VIDEO_CONV, new_name))
+						encodebin->vconv_name = g_strdup (new_name);
+				}
+			}
+			break;
 		}
 		//caps
 		case PROP_VCAPS: {
@@ -960,6 +995,21 @@ gst_encode_bin_set_property (GObject * object,
 			}
 			break;
 		}
+		case PROP_VIDEO_CONV: {
+			GstElement *newelement = g_value_get_object (value);
+			if(encodebin->profile == GST_ENCODE_BIN_PROFILE_AUDIO) {
+				GST_WARNING_OBJECT(encodebin, "Profile isn't match, change profile first!");
+				break;
+			}
+			if(newelement != NULL) {
+				gst_encode_bin_remove_element(encodebin, encodebin->color_space);
+				encodebin->color_space = newelement;
+				gst_object_ref (encodebin->color_space);
+				gst_object_sink (GST_OBJECT_CAST (encodebin->color_space));
+				gst_bin_add(GST_BIN(encodebin), encodebin->color_space);
+			}
+			break;
+		}
 		case PROP_USE_VIDEO_TOGGLE:
 			encodebin->use_video_toggle = g_value_get_boolean( value );
 			break;
@@ -1084,7 +1134,6 @@ gst_encode_bin_request_new_pad (GstElement * element,
 static void
 gst_encode_bin_class_init (GstEncodeBinClass *klass)
 {
-
 	GObjectClass *gobject_klass;
 	GstElementClass *gstelement_klass;
 	GstBinClass *gstbin_klass;
@@ -1125,6 +1174,10 @@ gst_encode_bin_class_init (GstEncodeBinClass *klass)
 	g_object_class_install_property (gobject_klass, PROP_MUX_NAME,
 	  g_param_spec_string ("mux-name", "muxer name", "the name of muxer to use",
 	      DEFAULT_PROP_MUX_NAME, G_PARAM_READWRITE));
+
+	g_object_class_install_property (gobject_klass, PROP_VCONV_NAME,
+	  g_param_spec_string ("vconv-name", "Video converter name", "the name of video color converter to use",
+	      DEFAULT_PROP_VCONV_NAME, G_PARAM_READWRITE));
 
 	g_object_class_install_property (gobject_klass, PROP_VCAPS,
 	  g_param_spec_boxed ("vcaps", "caps for video","caps for video recording",
@@ -1198,6 +1251,11 @@ gst_encode_bin_class_init (GstEncodeBinClass *klass)
 	      "the muxer element to use",
 	      GST_TYPE_ELEMENT, G_PARAM_READWRITE));
 
+	g_object_class_install_property (gobject_klass, PROP_VIDEO_CONV,
+	  g_param_spec_object ("video-convert", "Video converter",
+	      "the video converter element to use",
+	      GST_TYPE_ELEMENT, G_PARAM_READWRITE));
+
 	g_object_class_install_property (gobject_klass, PROP_USE_VIDEO_TOGGLE,
 		g_param_spec_boolean ("use-video-toggle", "Use video toggle",
 		"Use video toggle while AV recording", TRUE, G_PARAM_READWRITE));
@@ -1248,10 +1306,10 @@ gst_encode_bin_init (GstEncodeBin *encodebin)
 {
 	encodebin->mutex = g_mutex_new();
 
-	if(encodebin->srcpad == NULL) {
+	if (encodebin->srcpad == NULL) {
 		encodebin->srcpad = gst_ghost_pad_new_no_target ("src", GST_PAD_SRC);
 		gst_element_add_pad (GST_ELEMENT(encodebin), encodebin->srcpad);
-	}  
+	}
 
 	encodebin->video_sinkpad = NULL;
 	encodebin->audio_sinkpad = NULL;
@@ -1268,37 +1326,38 @@ gst_encode_bin_init (GstEncodeBin *encodebin)
 	encodebin->auto_audio_resample = TRUE;
 	encodebin->auto_color_space = TRUE;
 	encodebin->block = FALSE;
-	encodebin->pause= FALSE; 
+	encodebin->pause= FALSE;
 	encodebin->use_video_toggle = TRUE;
-	encodebin->use_venc_queue= FALSE; 	
-	encodebin->use_aenc_queue= FALSE; 		
+	encodebin->use_venc_queue= FALSE;
+	encodebin->use_aenc_queue= FALSE;
 
 	encodebin->venc_name = g_strdup(DEFAULT_PROP_VENC_NAME);
 	encodebin->aenc_name = g_strdup(DEFAULT_PROP_AENC_NAME);
-	encodebin->ienc_name = g_strdup(DEFAULT_PROP_IENC_NAME);  
-	encodebin->mux_name = g_strdup(DEFAULT_PROP_MUX_NAME);  
+	encodebin->ienc_name = g_strdup(DEFAULT_PROP_IENC_NAME);
+	encodebin->mux_name = g_strdup(DEFAULT_PROP_MUX_NAME);
+	encodebin->vconv_name = g_strdup(DEFAULT_PROP_VCONV_NAME);
 
 	encodebin->vcaps = gst_caps_new_any ();
 	encodebin->acaps = gst_caps_new_any ();
 	encodebin->icaps = gst_caps_new_any ();
 
 	encodebin->audio_queue = NULL;
-	encodebin->video_queue = NULL;  
-	encodebin->video_encode_queue = NULL; 	
-	encodebin->image_queue = NULL;    
+	encodebin->video_queue = NULL;
+	encodebin->video_encode_queue = NULL;
+	encodebin->image_queue = NULL;
 
 	encodebin->audio_encode = NULL;
 	encodebin->video_encode = NULL;
-	encodebin->image_encode = NULL;  
+	encodebin->image_encode = NULL;
 
-	encodebin->vcapsfilter = NULL;  
-	encodebin->acapsfilter = NULL;    
-	encodebin->icapsfilter = NULL;      
+	encodebin->vcapsfilter = NULL;
+	encodebin->acapsfilter = NULL;
+	encodebin->icapsfilter = NULL;
 
-	encodebin->video_toggle = NULL;  
+	encodebin->video_toggle = NULL;
 	encodebin->image_toggle = NULL;
-	encodebin->color_space = NULL;  
-	encodebin->audio_conv = NULL;  
+	encodebin->color_space = NULL;
+	encodebin->audio_conv = NULL;
 	encodebin->audio_sample = NULL;
 
 	encodebin->mux = NULL;
@@ -1310,11 +1369,11 @@ gst_encode_bin_init (GstEncodeBin *encodebin)
 	encodebin->vsink_hs_probeid = 0;
 	encodebin->asink_probeid = 0;
 	encodebin->veque_sig_id = 0;
-	encodebin->aeque_sig_id = 0; 	
+	encodebin->aeque_sig_id = 0;
 }
 
-static void 
-gst_encode_bin_dispose (GObject * object) 
+static void
+gst_encode_bin_dispose (GObject * object)
 {
 	GstEncodeBin *encodebin = GST_ENCODE_BIN (object);
 
@@ -1330,21 +1389,19 @@ gst_encode_bin_dispose (GObject * object)
 	g_free(encodebin->mux_name);
 	encodebin->mux_name = NULL;
 
+	g_free(encodebin->vconv_name);
+	encodebin->vconv_name = NULL;
 
 	gst_caps_replace (&encodebin->vcaps, NULL);
 	gst_caps_replace (&encodebin->acaps, NULL);
 	gst_caps_replace (&encodebin->icaps, NULL);
 
-	if(encodebin->srcpad != NULL)
-	{
-		gst_element_remove_pad (GST_ELEMENT(encodebin), encodebin->srcpad);
+	if (encodebin->srcpad != NULL) {
+		gst_element_remove_pad(GST_ELEMENT(encodebin), encodebin->srcpad);
 		encodebin->srcpad = NULL;
 	}
-		
 
 	G_OBJECT_CLASS (parent_class)->dispose (object);
-
-
 
 	encodebin->video_sinkpad = NULL;
 	encodebin->audio_sinkpad = NULL;
@@ -1353,34 +1410,33 @@ gst_encode_bin_dispose (GObject * object)
 	encodebin->mux_video_sinkpad = NULL;
 
 	encodebin->audio_queue = NULL;
-	encodebin->video_queue = NULL;  
-	encodebin->image_queue = NULL;    
+	encodebin->video_queue = NULL;
+	encodebin->image_queue = NULL;
 
 	encodebin->audio_encode = NULL;
 	encodebin->video_encode = NULL;
-	encodebin->video_encode_queue = NULL;	
-	encodebin->image_encode = NULL;  
+	encodebin->video_encode_queue = NULL;
+	encodebin->image_encode = NULL;
 
-	encodebin->vcapsfilter = NULL;  
-	encodebin->acapsfilter = NULL;    
-	encodebin->icapsfilter = NULL;      
+	encodebin->vcapsfilter = NULL;
+	encodebin->acapsfilter = NULL;
+	encodebin->icapsfilter = NULL;
 
-	encodebin->video_toggle = NULL;  
+	encodebin->video_toggle = NULL;
 	encodebin->image_toggle = NULL;
-	encodebin->color_space = NULL;  
-	encodebin->audio_conv = NULL;  
+	encodebin->color_space = NULL;
+	encodebin->audio_conv = NULL;
 	encodebin->audio_sample = NULL;
 	
-	if(encodebin->mux && GST_IS_ELEMENT(encodebin->mux))
-	{
-		int remain_count= 0 ;
+	if (encodebin->mux && GST_IS_ELEMENT(encodebin->mux)) {
+		int remain_count= 0;
 		remain_count = GST_OBJECT_REFCOUNT_VALUE(encodebin->mux);
-		while(remain_count)
-		{
+		while (remain_count) {
 			gst_object_unref(encodebin->mux);
 			remain_count--;
-		}		
+		}
 	}
+
 	encodebin->mux = NULL;
 }
 
@@ -1563,45 +1619,59 @@ static gboolean
 gst_encode_bin_add_element_by_name (GstEncodeBin *encodebin, GstEncodeBinElement type, const gchar *name)
 {
 	switch(type) {
-		case ENCODEBIN_ELEMENT_VENC :
-			encodebin->video_encode = gst_element_factory_make (name, "video_encode");	
+		case ENCODEBIN_ELEMENT_VENC:
+			encodebin->video_encode = gst_element_factory_make (name, "video_encode");
 			if(encodebin->video_encode != NULL) {
 				gst_bin_add(GST_BIN(encodebin), encodebin->video_encode);
 				g_free(encodebin->venc_name);
+				encodebin->venc_name = NULL;
 			} else {
 				goto element_make_fail;
 			}
 			break;
-		case ENCODEBIN_ELEMENT_AENC :
-			encodebin->audio_encode = gst_element_factory_make (name, "audio_encode");	
+		case ENCODEBIN_ELEMENT_AENC:
+			encodebin->audio_encode = gst_element_factory_make (name, "audio_encode");
 			if(encodebin->audio_encode != NULL) {
 				gst_bin_add(GST_BIN(encodebin), encodebin->audio_encode);
 				g_free(encodebin->aenc_name);
+				encodebin->aenc_name = NULL;
 			} else {
 				goto element_make_fail;
-			}			
+			}
 			break;
-		case ENCODEBIN_ELEMENT_IENC :
-			encodebin->image_encode = gst_element_factory_make (name, "image_encode");	
+		case ENCODEBIN_ELEMENT_IENC:
+			encodebin->image_encode = gst_element_factory_make (name, "image_encode");
 			if(encodebin->image_encode != NULL) {
 				gst_bin_add(GST_BIN(encodebin), encodebin->image_encode);
 				g_free(encodebin->ienc_name);
+				encodebin->ienc_name = NULL;
 			} else {
 				goto element_make_fail;
-			}		
+			}
 			break;
-		case ENCODEBIN_ELEMENT_MUX :
-			encodebin->mux = gst_element_factory_make (name, "mux");	
+		case ENCODEBIN_ELEMENT_MUX:
+			encodebin->mux = gst_element_factory_make (name, "mux");
 			if(encodebin->mux != NULL) {
 				gst_bin_add(GST_BIN(encodebin), encodebin->mux);
 				g_free(encodebin->mux_name);
+				encodebin->mux_name = NULL;
 			} else {
 				goto element_make_fail;
-			}		
+			}
 			break;
-		default :	
+		case ENCODEBIN_ELEMENT_VIDEO_CONV:
+			encodebin->color_space = gst_element_factory_make(name, "video_convert");
+			if (encodebin->color_space != NULL) {
+				gst_bin_add(GST_BIN(encodebin), encodebin->color_space);
+				g_free(encodebin->vconv_name);
+				encodebin->vconv_name = NULL;
+			} else {
+				goto element_make_fail;
+			}
+			break;
+		default:
 			GST_WARNING_OBJECT(encodebin, "Invalid element type = %d", type);
-			break;	
+			break;
 	}
 
 	return TRUE;
@@ -1824,10 +1894,12 @@ gst_encode_bin_remove_element (GstEncodeBin *encodebin, GstElement * element)
 {
 	GstObject *parent;
 	gchar *ename = NULL;
-	GST_DEBUG_OBJECT (encodebin, "gst_encode_bin_remove_element");
+	GST_INFO_OBJECT (encodebin, "gst_encode_bin_remove_element");
 
-	if(element == NULL)
+	if (element == NULL) {
+		GST_INFO_OBJECT (encodebin, "element is already NULL");
 		return TRUE;
+	}
 
 	gst_element_set_state (element, GST_STATE_NULL);
 	parent = gst_element_get_parent (element);
@@ -1839,11 +1911,13 @@ gst_encode_bin_remove_element (GstEncodeBin *encodebin, GstElement * element)
 			GST_ERROR_OBJECT (encodebin, "gst_encode_bin_remove_element() [%s] remove fail", ename);
 			g_free (ename);
 			return FALSE;
-		} else
-			gst_object_unref (parent);
+		} else {
+			gst_object_unref(parent);
+		}
 	} else {
 		gst_object_unref(element);
 	}
+
 	return TRUE;
   }
 
@@ -1853,18 +1927,25 @@ gst_encode_bin_link_elements (GstEncodeBin *encodebin)  // need to return ????
 	GstPad *srcpad = NULL, *sinkpad = NULL;
 	switch(encodebin->profile) {
 		case GST_ENCODE_BIN_PROFILE_AV :
-			if(!gst_caps_is_any(encodebin->vcaps))
-			{
+			if (!gst_caps_is_any(encodebin->vcaps)) {
+				gchar *caps_str = NULL;
+				caps_str = gst_caps_to_string(encodebin->vcaps);
+				if (caps_str) {
+					GST_INFO_OBJECT(encodebin, "vconv caps [%s]", caps_str);
+					g_free(caps_str);
+					caps_str = NULL;
+				}
+
 				g_object_set(encodebin->vcapsfilter, "caps", encodebin->vcaps, NULL);
 			}
-	
+
 			if (encodebin->auto_color_space) {
 				if(encodebin->color_space == NULL) {
-				    encodebin->color_space  = gst_element_factory_make ("ffmpegcolorspace","color_space");
-				    gst_bin_add (GST_BIN (encodebin), encodebin->color_space);
+					encodebin->color_space = gst_element_factory_make (encodebin->vconv_name, "video_convert");
+					gst_bin_add (GST_BIN (encodebin), encodebin->color_space);
 				}
-				
-				srcpad = gst_element_get_static_pad(encodebin->video_queue, "src");				
+
+				srcpad = gst_element_get_static_pad(encodebin->video_queue, "src");
 				if( encodebin->video_toggle )
 				{
 					sinkpad = gst_element_get_static_pad(encodebin->video_toggle, "sink");
@@ -1877,11 +1958,11 @@ gst_encode_bin_link_elements (GstEncodeBin *encodebin)  // need to return ????
 
 				srcpad = gst_element_get_static_pad(encodebin->color_space, "src");
 				sinkpad = gst_element_get_static_pad(encodebin->vcapsfilter, "sink");
-				_GST_PAD_LINK_UNREF(srcpad, sinkpad, video_link_fail);	
+				_GST_PAD_LINK_UNREF(srcpad, sinkpad, video_link_fail);
 
 				srcpad = gst_element_get_static_pad(encodebin->vcapsfilter, "src");
 				sinkpad = gst_element_get_static_pad(encodebin->video_encode, "sink");
-				_GST_PAD_LINK_UNREF(srcpad, sinkpad, video_link_fail);					
+				_GST_PAD_LINK_UNREF(srcpad, sinkpad, video_link_fail);
 #if 0
 				if(encodebin->use_venc_queue)
 				{
@@ -2347,46 +2428,39 @@ gst_encode_bin_unlink_elements (GstEncodeBin *encodebin)
 	switch(encodebin->profile) {
 		case GST_ENCODE_BIN_PROFILE_AV :
 			if (encodebin->auto_color_space) {
-				if( encodebin->video_toggle )
-				{
-					gst_element_unlink_many  (
+				if (encodebin->video_toggle) {
+					gst_element_unlink_many(
 						encodebin->video_queue,
 						encodebin->video_toggle,
 						encodebin->color_space,
-						encodebin->vcapsfilter,              			                   	
+						encodebin->vcapsfilter,
 						encodebin->video_encode,
-						//encodebin->video_encode_queue,					
+						//encodebin->video_encode_queue,
 						NULL);
-				}
-				else
-				{
+				} else {
 					gst_element_unlink_many(
 						encodebin->video_queue,
 						encodebin->color_space,
-						encodebin->vcapsfilter,              			                   	
+						encodebin->vcapsfilter,
 						encodebin->video_encode,
-						//encodebin->video_encode_queue,					
+						//encodebin->video_encode_queue,
 						NULL);
 				}
-			}
-			else {
-				if( encodebin->video_toggle )
-				{
-					gst_element_unlink_many  (
-						encodebin->video_queue,
-						encodebin->video_toggle,
-						encodebin->vcapsfilter,              			                   	
-						encodebin->video_encode,
-						//encodebin->video_encode_queue,						
-						NULL);
-				}
-				else
-				{
+			} else {
+				if (encodebin->video_toggle) {
 					gst_element_unlink_many(
 						encodebin->video_queue,
-						encodebin->vcapsfilter,              			                   	
+						encodebin->video_toggle,
+						encodebin->vcapsfilter,
 						encodebin->video_encode,
-						//encodebin->video_encode_queue,						
+						//encodebin->video_encode_queue,
+						NULL);
+				} else {
+					gst_element_unlink_many(
+						encodebin->video_queue,
+						encodebin->vcapsfilter,
+						encodebin->video_encode,
+						//encodebin->video_encode_queue,
 						NULL);
 				}
 			}

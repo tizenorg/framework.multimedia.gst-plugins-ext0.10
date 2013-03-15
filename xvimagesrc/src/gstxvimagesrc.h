@@ -46,7 +46,7 @@
 #include <X11/extensions/Xdamage.h>
 
 #include <dri2.h> //libdri2-dev, libdrm-dev
-#include <drm_slp_bufmgr.h>
+#include <tbm_bufmgr.h>
 
 #include "xv_types.h"
 
@@ -87,9 +87,9 @@ struct _GstXVImageSrc {
   guint32 format_id;
   Damage damage;
   int damage_base;
-  drm_slp_bufmgr bufmgr;
+  tbm_bufmgr bufmgr;
   void *virtual;
-  drm_slp_bo bo;
+  tbm_bo bo;
   DRI2Buffer* dri2_buffers;
   guint64 running_time;
   guint64 base_time;

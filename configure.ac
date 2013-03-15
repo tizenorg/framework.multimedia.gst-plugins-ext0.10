@@ -190,16 +190,16 @@ PKG_CHECK_MODULES(DRM, libdrm-devel)
 AC_SUBST(DRM_DEVEL_CFLAGS)
 AC_SUBST(DRM_DEVEL_LIBS)
 
-PKG_CHECK_MODULES(DRM_SLP, libdrm_slp)
-AC_SUBST(DRM_SLP_CFLAGS)
-AC_SUBST(DRM_SLP_LIBS)
+PKG_CHECK_MODULES(TBM, libtbm)
+AC_SUBST(TBM_CFLAGS)
+AC_SUBST(TBM_LIBS)
 
 dnl use time analysis module
 PKG_CHECK_MODULES(MMTA, mm-ta)
 AC_SUBST(MMTA_CFLAGS)
 AC_SUBST(MMTA_LIBS)
 
-dnl required package for evasimagesink
+dnl required package for evasimagesink/evaspixmapsink
 PKG_CHECK_MODULES(EFL, [
   evas >= $EFL_REQUIRED
   ecore >= $EFL_REQUIRED
@@ -214,6 +214,79 @@ PKG_CHECK_MODULES(EFL, [
       libevas-dev and libecore-dev.
       The minimum version required is $EFL_REQUIRED.
   ])
+])
+
+dnl *** belows are related to evaspixmapsink plug-ins ***
+AG_GST_ARG_WITH_PACKAGE_NAME
+AG_GST_ARG_WITH_PACKAGE_ORIGIN
+
+dnl set license and copyright notice
+GST_LICENSE="LGPL"
+AC_DEFINE_UNQUOTED(GST_LICENSE, "$GST_LICENSE", [GStreamer license])
+AC_SUBST(GST_LICENSE)
+
+echo
+AC_MSG_NOTICE([Checking libraries for evaspixmapsink plugin])
+echo
+dnl *** X11 ***
+translit(dnm, m, l) AM_CONDITIONAL(USE_X, true)
+AG_GST_CHECK_FEATURE(X, [X libraries and plugins],
+                  [evaspixmapsink], [
+  AC_PATH_XTRA
+  ac_cflags_save="$CFLAGS"
+  ac_cppflags_save="$CPPFLAGS"
+  CFLAGS="$CFLAGS $X_CFLAGS"
+  CPPFLAGS="$CPPFLAGS $X_CFLAGS"
+
+  dnl now try to find the HEADER
+  AC_CHECK_HEADER(X11/Xlib.h, HAVE_X="yes", HAVE_X="no")
+
+  if test "x$HAVE_X" = "xno"
+  then
+    AC_MSG_NOTICE([cannot find X11 development files])
+  else
+    dnl this is much more than we want
+    X_LIBS="$X_LIBS $X_PRE_LIBS $X_EXTRA_LIBS"
+    dnl AC_PATH_XTRA only defines the path needed to find the X libs,
+    dnl it does not add the libs; therefore we add them here
+    X_LIBS="$X_LIBS -lX11"
+    AC_SUBST(X_CFLAGS)
+    AC_SUBST(X_LIBS)
+  fi
+  AC_SUBST(HAVE_X)
+  CFLAGS="$ac_cflags_save"
+  CPPFLAGS="$ac_cppflags_save"
+])
+
+dnl Check for Xv extension
+translit(dnm, m, l) AM_CONDITIONAL(USE_XVIDEO, true)
+AG_GST_CHECK_FEATURE(XVIDEO, [X11 XVideo extensions],
+                  [evaspixmapsink], [
+AG_GST_CHECK_XV
+])
+
+dnl check for X Shm
+translit(dnm, m, l) AM_CONDITIONAL(USE_XSHM, true)
+AG_GST_CHECK_FEATURE(XSHM, [X Shared Memory extension], , [
+  if test x$HAVE_X = xyes; then
+    AC_CHECK_LIB(Xext, XShmAttach,
+		 HAVE_XSHM="yes", HAVE_XSHM="no",
+		 $X_LIBS)
+    if test "x$HAVE_XSHM" = "xyes"; then
+      XSHM_LIBS="-lXext"
+    else
+      dnl On AIX, it is in XextSam instead, but we still need -lXext
+      AC_CHECK_LIB(XextSam, XShmAttach,
+		   HAVE_XSHM="yes", HAVE_XSHM="no",
+		   $X_LIBS)
+      if test "x$HAVE_XSHM" = "xyes"; then
+	XSHM_LIBS="-lXext -lXextSam"
+      fi
+    fi
+  fi
+], , [
+  AC_SUBST(HAVE_XSHM)
+  AC_SUBST(XSHM_LIBS)
 ])
 
 dnl PKG_CHECK_MODULES(UDEVMGR, unified-dev-mgr)
@@ -255,6 +328,18 @@ AC_ARG_ENABLE(ext-evasimagesink, AC_HELP_STRING([--enable-ext-evasimagesink], [u
   ],
   [GST_EXT_USE_EXT_EVASIMAGESINK=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_EVASIMAGESINK, test "x$GST_EXT_USE_EXT_EVASIMAGESINK" = "xyes")
+
+dnl use evaspixmapsink ---------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-evaspixmapsink, AC_HELP_STRING([--enable-ext-evaspixmapsink], [using evaspixmapsink]),
+  [
+    case "${enableval}" in
+      yes) GST_EXT_USE_EXT_EVASPIXMAPSINK=yes ;;
+      no)  GST_EXT_USE_EXT_EVASPIXMAPSINK=no ;;
+      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-evaspixmapsink) ;;
+    esac
+  ],
+  [GST_EXT_USE_EXT_EVASPIXMAPSINK=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_EVASPIXMAPSINK, test "x$GST_EXT_USE_EXT_EVASPIXMAPSINK" = "xyes")
 
 dnl use ext-xvimagesrc--------------------------------------------------------------------------
 AC_ARG_ENABLE(ext-xvimagesrc, AC_HELP_STRING([--enable-ext-xvimagesrc], [using xvimagesrc]),
@@ -375,6 +460,7 @@ encodebin/Makefile
 encodebin/src/Makefile
 evasimagesink/Makefile
 evasimagesink/src/Makefile
+evaspixmapsink/Makefile
 xvimagesrc/Makefile
 xvimagesrc/src/Makefile
 toggle/Makefile

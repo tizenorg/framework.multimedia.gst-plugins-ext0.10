@@ -17,6 +17,10 @@ if GST_EXT_USE_EXT_EVASIMAGESINK
 SUBDIRS += evasimagesink
 endif
 
+if GST_EXT_USE_EXT_EVASPIXMAPSINK
+SUBDIRS += evaspixmapsink
+endif
+
 if GST_EXT_USE_EXT_XVIMAGESRC
 SUBDIRS += xvimagesrc
 endif

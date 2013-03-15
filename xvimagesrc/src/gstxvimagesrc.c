@@ -203,9 +203,9 @@ static gboolean gst_xv_image_src_unlock (GstBaseSrc * bsrc);
 static gboolean gst_xv_image_src_unlock_stop (GstBaseSrc * bsrc);
 static gboolean gst_xv_image_src_setcaps (GstBaseSrc * bsrc, GstCaps * caps);
 
-static drm_slp_bufmgr bufmgr_get (Display *dpy, Pixmap pixmap);
+static tbm_bufmgr bufmgr_get (Display *dpy, Pixmap pixmap);
 static int port_get (Display *dpy, unsigned int id);
-static void pixmap_update (GstXVImageSrc * src,Display *dpy, drm_slp_bufmgr bufmgr, Pixmap pixmap,
+static void pixmap_update (GstXVImageSrc * src,Display *dpy, tbm_bufmgr bufmgr, Pixmap pixmap,
                int x, int y, int width, int height);
 static Pixmap pixmap_create (GstXVImageSrc * src, Display *dpy, int width, int height);
 
@@ -922,9 +922,9 @@ static void* gst_xv_image_src_update_thread (void * asrc)
       gst_buffer_unref(outbuf);
     }
     update_done:
-      if (src->virtual) drm_slp_bo_unmap(src->bo, DRM_SLP_DEVICE_CPU);
+      if (src->virtual) tbm_bo_unmap(src->bo);
       src->virtual = NULL;
-      if (src->bo) drm_slp_bo_unref(src->bo);
+      if (src->bo) tbm_bo_unref(src->bo);
       src->bo = NULL;
       if (src->dri2_buffers) free(src->dri2_buffers);
       src->dri2_buffers = NULL;
@@ -959,7 +959,7 @@ static void* gst_xv_image_src_update_thread (void * asrc)
     src->atom_stream_off = 0;
   }
   if (src->bufmgr) {
-    drm_slp_bufmgr_destroy (src->bufmgr);
+    tbm_bufmgr_deinit (src->bufmgr);
     src->bufmgr = NULL;
   }
   if (src->p > 0) {
@@ -986,7 +986,7 @@ finish:
     XvSetPortAttribute (src->dpy, src->p, src->atom_stream_off, 1);
     src->atom_stream_off = 0;
   }
-  if (src->bufmgr) drm_slp_bufmgr_destroy (src->bufmgr);
+  if (src->bufmgr) tbm_bufmgr_deinit (src->bufmgr);
   src->bufmgr = NULL;
   if (src->p > 0) XvUngrabPort (src->dpy, src->p, 0);
   src->p = 0;
@@ -1000,11 +1000,11 @@ finish:
   return NULL;
 }
 
-static drm_slp_bufmgr bufmgr_get (Display *dpy, Pixmap pixmap)
+static tbm_bufmgr bufmgr_get (Display *dpy, Pixmap pixmap)
 {
   int screen;
   int drm_fd;
-  drm_slp_bufmgr bufmgr;
+  tbm_bufmgr bufmgr;
   int eventBase, errorBase;
   int dri2Major, dri2Minor;
   char *driverName, *deviceName;
@@ -1045,7 +1045,7 @@ static drm_slp_bufmgr bufmgr_get (Display *dpy, Pixmap pixmap)
     return NULL;
   }
   // drm slp buffer manager init
-  bufmgr = drm_slp_bufmgr_init (drm_fd, NULL);
+  bufmgr = tbm_bufmgr_init (drm_fd);
   if (!bufmgr) {
     GST_ERROR ("!!Error : fail to init buffer manager ");
     close (drm_fd);
@@ -1112,13 +1112,14 @@ static int port_get (Display *dpy, unsigned int id)
   return -1;
 }
 
-static void pixmap_update (GstXVImageSrc * src, Display *dpy, drm_slp_bufmgr bufmgr, Pixmap pixmap,
+static void pixmap_update (GstXVImageSrc * src, Display *dpy, tbm_bufmgr bufmgr, Pixmap pixmap,
                int x, int y, int width, int height)
 {
   unsigned int attachments[1];
   int dri2_count, dri2_out_count;
   int dri2_width, dri2_height, dri2_stride;
   int opt;
+  tbm_bo_handle temp_virtual;
   attachments[0] = DRI2BufferFrontLeft;
   dri2_count = 1;
   src->dri2_buffers = DRI2GetBuffers (dpy, pixmap, &dri2_width, &dri2_height, attachments, dri2_count, &dri2_out_count);
@@ -1130,23 +1131,24 @@ static void pixmap_update (GstXVImageSrc * src, Display *dpy, drm_slp_bufmgr buf
     GST_ERROR ("[Error] : a handle of the dri2 buffer is null  ");
     goto update_done;
   }
-  src->bo = drm_slp_bo_import(bufmgr, src->dri2_buffers[0].name);
+  src->bo = tbm_bo_import(bufmgr, src->dri2_buffers[0].name);
   if (!src->bo) {
     GST_ERROR ("[Error] : cannot import bo (key:%d)", src->dri2_buffers[0].name);
     goto update_done;
   }
   dri2_stride = src->dri2_buffers[0].pitch;
-  opt = DRM_SLP_OPTION_READ|DRM_SLP_OPTION_WRITE;
-  src->virtual = drm_slp_bo_map (src->bo, DRM_SLP_DEVICE_CPU, opt);
+  opt = TBM_OPTION_READ|TBM_OPTION_WRITE;
+  temp_virtual = tbm_bo_map (src->bo, TBM_DEVICE_CPU, opt);
+  src->virtual = temp_virtual.ptr;
   if (!src->virtual) {
     GST_ERROR ("[Error] : fail to map ");
     goto update_done;
   }
   return;
 update_done:
-  if (src->virtual) drm_slp_bo_unmap(src->bo, DRM_SLP_DEVICE_CPU);
+  if (src->virtual) tbm_bo_unmap(src->bo);
   src->virtual = NULL;
-  if (src->bo) drm_slp_bo_unref(src->bo);
+  if (src->bo) tbm_bo_unref(src->bo);
   src->bo = NULL;
   if (src->dri2_buffers) free(src->dri2_buffers);
   src->dri2_buffers = NULL;
