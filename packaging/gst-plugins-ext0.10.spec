@@ -1,7 +1,7 @@
 Name:       gst-plugins-ext0.10
 Version:    0.3.0
 Summary:    GStreamer extra plugins (common)
-Release:    1
+Release:    2
 Group:      libs
 License:    LGPLv2+
 Source0:    %{name}-%{version}.tar.gz

@@ -87,13 +87,14 @@ struct _GstXVImageSrc {
   guint32 format_id;
   Damage damage;
   int damage_base;
+  unsigned int evt_base;
   tbm_bufmgr bufmgr;
   void *virtual;
   tbm_bo bo;
   DRI2Buffer* dri2_buffers;
   guint64 running_time;
   guint64 base_time;
-  guint64 frame_duration;;
+  guint64 frame_duration;
   Atom atom_stream_off;
   gint rate_numerator;
   gint rate_denominator;
@@ -103,12 +104,16 @@ struct _GstXVImageSrc {
   GMutex *queue_lock;
   GCond *queue_cond;
   GMutex *cond_lock;
+  GCond *buffer_cond;
+  GMutex *buffer_cond_lock;
+  GMutex *dpy_lock;
   gint drm_fd;
   int current_data_type;
   int new_data_type;
   double get_image_overtime;
   int get_image_overtime_cnt;
   int gemname_cnt;
+  int tz_enable;
 
 };
 
