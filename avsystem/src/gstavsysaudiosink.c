@@ -45,7 +45,7 @@ GST_DEBUG_CATEGORY_EXTERN (avsystem_sink_debug);
 #define DEFAULT_FADEUP_VOLUME	FALSE
 #define DEFAULT_AUDIO_MUTE	AVSYSAUDIOSINK_AUDIO_UNMUTE
 #define DEFAULT_AUDIO_LATENCY	AVSYSAUDIOSINK_LATENCY_MID
-
+#define DEFAULT_AUDIO_CLOSE_HANDLE_ON_PREPARE	FALSE
 
 //GST_DEBUG_CATEGORY_STATIC (gst_avsystemsink_debug);
 
@@ -67,7 +67,8 @@ enum
 	PROP_AUDIO_USER_ROUTE,
 	PROP_AUDIO_LATENCY,
 	PROP_AUDIO_HANDLE,
-	PROP_AUDIO_CALLBACK
+	PROP_AUDIO_CALLBACK,
+	PROP_AUDIO_CLOSE_HANDLE_ON_PREPARE,
 };
 
 GType
@@ -278,12 +279,12 @@ gst_avsysaudiosink_class_init (GstAvsysAudioSinkClass * klass)
 
 	g_object_class_install_property (  gobject_class, PROP_AUDIO_HANDLE,
 			g_param_spec_pointer("audio-handle", "Avsystem handle",
-					"Avsystem audio handle", 
+					"Avsystem audio handle",
 					G_PARAM_READWRITE));
 
 	g_object_class_install_property (  gobject_class, PROP_AUDIO_CALLBACK,
 			g_param_spec_pointer("audio-callback", "Avsystem callback",
-					"Avsystem audio callback", 
+					"Avsystem audio callback",
 					G_PARAM_READWRITE));
 
 	g_object_class_install_property (gobject_class, PROP_AUDIO_FADEUPVOLUME,
@@ -302,7 +303,7 @@ gst_avsysaudiosink_class_init (GstAvsysAudioSinkClass * klass)
 					"Audio route policy of system",
 					GST_AVSYS_AUDIO_SINK_AUDIO_ROUTE, DEFAULT_AUDIO_ROUTE,
 					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS ));
-	
+
 	g_object_class_install_property (gobject_class ,PROP_AUDIO_USER_ROUTE,
 			g_param_spec_enum("user-route", "User Route Policy",
 					"User route policy",
@@ -314,6 +315,11 @@ gst_avsysaudiosink_class_init (GstAvsysAudioSinkClass * klass)
 					"Audio backend latency",
 					GST_AVSYS_AUDIO_SINK_LATENCY_TYPE, DEFAULT_AUDIO_LATENCY,
 					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS ));
+
+	g_object_class_install_property (gobject_class, PROP_AUDIO_CLOSE_HANDLE_ON_PREPARE,
+			g_param_spec_boolean ("close-handle-on-prepare", "Close Handle on Prepare",
+					"Close Handle on Prepare",
+					DEFAULT_AUDIO_CLOSE_HANDLE_ON_PREPARE, G_PARAM_READWRITE));
 }
 
 static void
@@ -378,6 +384,10 @@ gst_avsysaudiosink_set_property (GObject * object, guint prop_id,
 		nvalue = g_value_get_enum(value);
 		sink->latency = nvalue;
 		break;
+	case PROP_AUDIO_CLOSE_HANDLE_ON_PREPARE:
+		nbool = g_value_get_boolean(value);
+		sink->close_handle_on_prepare = nbool;
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -414,6 +424,9 @@ gst_avsysaudiosink_get_property (GObject * object, guint prop_id,
 	case PROP_AUDIO_LATENCY:
 		g_value_set_enum(value, sink->latency);
 		break;
+	case PROP_AUDIO_CLOSE_HANDLE_ON_PREPARE:
+		g_value_set_boolean(value, sink->close_handle_on_prepare);
+		break;
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -437,6 +450,7 @@ gst_avsysaudiosink_init (GstAvsysAudioSink * avsysaudiosink, GstAvsysAudioSinkCl
 	avsysaudiosink->latency = DEFAULT_AUDIO_LATENCY;
 	avsysaudiosink->audio_route_policy = DEFAULT_AUDIO_ROUTE;
 	avsysaudiosink->bytes_per_sample = 1;
+	avsysaudiosink->close_handle_on_prepare = DEFAULT_AUDIO_CLOSE_HANDLE_ON_PREPARE;
 #if defined (LPCM_DUMP_SUPPORT)
 	avsysaudiosink->dumpFp = NULL;
 #endif
@@ -546,6 +560,8 @@ gst_avsysaudiosink_prepare (GstAudioSink * asink, GstRingBufferSpec * spec)
 
 	avsys_audio = GST_AVSYS_AUDIO_SINK (asink);
 
+	GST_WARNING("Start");
+
 	// set avsys audio param
 	if (!avsysaudiosink_parse_spec (avsys_audio, spec))
 		goto spec_parse;
@@ -564,12 +580,21 @@ gst_avsysaudiosink_prepare (GstAudioSink * asink, GstRingBufferSpec * spec)
 		spec->latency_time = (guint64)p_time;
 		spec->buffer_time = (guint64)b_time;
 	} else {
+		GST_WARNING_OBJECT(avsys_audio, "");
 		return FALSE;
 	}
 	spec->segsize = avsys_audio->avsys_size; /* '/16' see avsys_audio_open */
 	spec->segtotal = (b_time / p_time) + (((b_time % p_time)/p_time > 0.5) ? 1: 0);
 	//spec->segtotal+2;
 
+	if (avsys_audio->close_handle_on_prepare) {
+		if (gst_avsysaudiosink_avsys_close(avsys_audio) == FALSE) {
+			GST_ERROR_OBJECT(avsys_audio, "gst_avsysaudiosink_avsys_close() failed");
+			return FALSE;
+		}
+	}
+
+	GST_WARNING("End");
 	GST_WARNING_OBJECT (avsys_audio, "latency time %u, buffer time %u, seg total %u\n",
 			(unsigned int)(spec->latency_time/1000), (unsigned int)(spec->buffer_time/1000), spec->segtotal);
 	return TRUE;
@@ -589,11 +614,13 @@ gst_avsysaudiosink_unprepare (GstAudioSink * asink)
 	gboolean			result = TRUE;
 	avsys_audio = GST_AVSYS_AUDIO_SINK (asink);
 
+	GST_WARNING("Start");
 	if(!gst_avsysaudiosink_avsys_close(avsys_audio))
 	{
 		GST_ERROR_OBJECT(avsys_audio, "gst_avsysaudiosink_avsys_close() failed");
 		result = FALSE;
 	}
+	GST_WARNING("End");
 
 	return result;
 }
@@ -683,6 +710,7 @@ gst_avsysaudiosink_reset (GstAudioSink * asink)
 	GstAvsysAudioSink *avsys_audio = NULL;
 	int avsys_result = AVSYS_STATE_SUCCESS;
 
+	GST_WARNING("Start");
 	GST_AVSYS_AUDIO_SINK_LOCK (asink);
 	avsys_audio = GST_AVSYS_AUDIO_SINK (asink);
 
@@ -702,6 +730,7 @@ gst_avsysaudiosink_reset (GstAudioSink * asink)
 #endif
 
 	GST_AVSYS_AUDIO_SINK_UNLOCK (asink);
+	GST_WARNING("End");
 
 	return;
 }

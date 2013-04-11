@@ -92,6 +92,7 @@ struct _GstAvsysAudioSink {
 	gint                		avsys_size;
 	gint						mute;
 	gint						use_fadeup_volume;
+	gint						close_handle_on_prepare;
 	gint						audio_route_policy;
 	gint						user_route_policy;
 	gint						latency;
