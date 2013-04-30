@@ -44,10 +44,8 @@
 #include <X11/extensions/Xvlib.h>
 #include <X11/extensions/Xdamage.h>
 #include <X11/extensions/damagewire.h>
-#ifdef GST_EXT_XV_ENHANCEMENT
 #include <X11/Xatom.h>
 #include <stdio.h>
-#endif
 
 #include <Evas.h>
 #include <Ecore.h>
@@ -80,10 +78,9 @@ G_BEGIN_DECLS
 #define GST_IS_EVASPIXMAPSINK_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_EVASPIXMAPSINK))
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 #define XV_SCREEN_SIZE_WIDTH 4096
 #define XV_SCREEN_SIZE_HEIGHT 4096
-#endif /* GST_EXT_XV_ENHANCEMENT */
+
 #define MARGIN_OF_ERROR 0.005
 
 typedef struct _GstXContext GstXContext;
@@ -167,9 +164,7 @@ struct _GstXContext {
  */
 struct _GstXPixmap {
 	Pixmap pixmap;
-#ifdef GST_EXT_XV_ENHANCEMENT
 	gint x, y;
-#endif
 	gint width, height;
 	GC gc;
 };
@@ -264,7 +259,6 @@ struct _GstEvasPixmapSink {
 
 	gboolean synchronous;
 	gboolean double_buffer;
-	gboolean keep_aspect;
 
 	gint brightness;
 	gint contrast;
@@ -292,15 +286,16 @@ struct _GstEvasPixmapSink {
 	GstVideoRectangle render_rect;
 	gboolean have_render_rect;
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	/* display */
+	guint flip;
+	guint rotate_angle;
 	guint display_geometry_method;
 	GstVideoRectangle dst_roi;
 	guint scr_w, scr_h;
 	/* needed if fourcc is one if S series */
 	guint aligned_width;
 	guint aligned_height;
-#endif
+
 	gboolean stop_video;
 
 	/* evas object */
@@ -312,7 +307,7 @@ struct _GstEvasPixmapSink {
 	/* pixmap */
 	gboolean do_link;
 	gboolean use_origin_size;
-	gboolean former_origin_size;
+	gboolean previous_origin_size;
 
 	/* damage event */
 	Damage damage;
@@ -324,7 +319,6 @@ struct _GstEvasPixmapSink {
 	gem_info_t gem_info[MAX_GEM_BUFFER_NUM];
 };
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 /* max plane count *********************************************************/
 #define MPLANE_IMGB_MAX_COUNT         (4)
 
@@ -375,7 +369,6 @@ struct _GstMultiPlaneImageBuffer
     /* arbitrary data */
     gint      data[16];
 };
-#endif /* GST_EXT_XV_ENHANCEMENT */
 
 struct _GstEvasPixmapSinkClass {
   GstVideoSinkClass parent_class;

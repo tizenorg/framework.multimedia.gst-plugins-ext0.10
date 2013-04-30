@@ -35,7 +35,6 @@
 /* Object header */
 #include "evaspixmapsink.h"
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 /* Samsung extension headers */
 /* For xv extension header for buffer transfer (output) */
 #include "xv_types.h"
@@ -108,15 +107,12 @@ typedef struct
 	/* buffer share method */
 	int buf_share_method;
 } SCMN_IMGB;
-#endif
 
 /* Debugging category */
 #include <gst/gstinfo.h>
 GST_DEBUG_CATEGORY_STATIC (gst_debug_evaspixmapsink);
 #define GST_CAT_DEFAULT gst_debug_evaspixmapsink
 GST_DEBUG_CATEGORY_STATIC (GST_CAT_PERFORMANCE);
-
-#ifdef GST_EXT_XV_ENHANCEMENT
 
 enum {
     DEGREE_0,
@@ -135,9 +131,57 @@ enum {
     DISP_GEO_METHOD_NUM,
 };
 
-#define DEF_DISPLAY_GEOMETRY_METHOD DISP_GEO_METHOD_LETTER_BOX
+enum {
+    FLIP_NONE = 0,
+    FLIP_HORIZONTAL,
+    FLIP_VERTICAL,
+    FLIP_BOTH,
+    FLIP_NUM,
+};
 
+#define DEF_DISPLAY_GEOMETRY_METHOD                     DISP_GEO_METHOD_LETTER_BOX
+#define DEF_DISPLAY_FLIP                                FLIP_NONE
+#define GST_TYPE_EVASPIXMAPSINK_FLIP                    (gst_evaspixmapsink_flip_get_type())
+#define GST_TYPE_EVASPIXMAPSINK_ROTATE_ANGLE            (gst_evaspixmapsink_rotate_angle_get_type())
 #define GST_TYPE_EVASPIXMAPSINK_DISPLAY_GEOMETRY_METHOD (gst_evaspixmapsink_display_geometry_method_get_type())
+
+static GType
+gst_evaspixmapsink_flip_get_type(void)
+{
+	static GType evaspixmapsink_flip_type = 0;
+	static const GEnumValue flip_type[] = {
+		{ FLIP_NONE,       "Flip NONE", "FLIP_NONE"},
+		{ FLIP_HORIZONTAL, "Flip HORIZONTAL", "FLIP_HORIZONTAL"},
+		{ FLIP_VERTICAL,   "Flip VERTICAL", "FLIP_VERTICAL"},
+		{ FLIP_BOTH,       "Flip BOTH", "FLIP_BOTH"},
+		{ FLIP_NUM, NULL, NULL},
+	};
+
+	if (!evaspixmapsink_flip_type) {
+		evaspixmapsink_flip_type = g_enum_register_static("GstEvasPixmapSinkFlipType", flip_type);
+	}
+
+	return evaspixmapsink_flip_type;
+}
+
+static GType
+gst_evaspixmapsink_rotate_angle_get_type(void)
+{
+	static GType evaspixmapsink_rotate_angle_type = 0;
+	static const GEnumValue rotate_angle_type[] = {
+		{ 0, "No rotate", "DEGREE_0"},
+		{ 1, "Rotate 90 degree", "DEGREE_90"},
+		{ 2, "Rotate 180 degree", "DEGREE_180"},
+		{ 3, "Rotate 270 degree", "DEGREE_270"},
+		{ 4, NULL, NULL},
+	};
+
+	if (!evaspixmapsink_rotate_angle_type) {
+		evaspixmapsink_rotate_angle_type = g_enum_register_static("GstEvasPixmapSinkRotateAngleType", rotate_angle_type);
+	}
+
+	return evaspixmapsink_rotate_angle_type;
+}
 
 static GType
 gst_evaspixmapsink_display_geometry_method_get_type(void)
@@ -158,7 +202,6 @@ gst_evaspixmapsink_display_geometry_method_get_type(void)
 
 	return evaspixmapsink_display_geometry_method_type;
 }
-#endif /* GST_EXT_XV_ENHANCEMENT */
 
 typedef struct
 {
@@ -209,7 +252,6 @@ enum
   PROP_DISPLAY,
   PROP_SYNCHRONOUS,
   PROP_PIXEL_ASPECT_RATIO,
-  PROP_FORCE_ASPECT_RATIO,
   PROP_DEVICE,
   PROP_DEVICE_NAME,
   PROP_DOUBLE_BUFFER,
@@ -217,7 +259,8 @@ enum
   PROP_COLORKEY,
   PROP_PIXMAP_WIDTH,
   PROP_PIXMAP_HEIGHT,
-#ifdef GST_EXT_XV_ENHANCEMENT
+  PROP_FLIP,
+  PROP_ROTATE_ANGLE,
   PROP_DISPLAY_GEOMETRY_METHOD,
   PROP_ZOOM,
   PROP_DST_ROI_X,
@@ -225,7 +268,6 @@ enum
   PROP_DST_ROI_W,
   PROP_DST_ROI_H,
   PROP_STOP_VIDEO,
-#endif
   PROP_EVAS_OBJECT,
   PROP_VISIBLE,
   PROP_ORIGIN_SIZE,
@@ -264,6 +306,7 @@ ecore_pipe_callback_handler (void *data, void *buffer, unsigned int nbyte)
 	/* mapping evas object with xpixmap */
 	if (evaspixmapsink->do_link) {
 		GST_DEBUG_OBJECT (evaspixmapsink,"do link");
+		evas_object_image_size_set(evaspixmapsink->eo, evaspixmapsink->w, evaspixmapsink->h);
 		if (evaspixmapsink->xpixmap->pixmap) {
 			Evas_Native_Surface surf;
 			surf.version = EVAS_NATIVE_SURFACE_VERSION;
@@ -657,14 +700,13 @@ gst_evaspixmap_buffer_new (GstEvasPixmapSink *evaspixmapsink, GstCaps *caps)
 	}
 
 	GST_LOG_OBJECT (evaspixmapsink,"creating %dx%d", evaspixmapbuf->width, evaspixmapbuf->height);
-#ifdef GST_EXT_XV_ENHANCEMENT
+
 	GST_LOG_OBJECT (evaspixmapsink,"aligned size %dx%d", evaspixmapsink->aligned_width, evaspixmapsink->aligned_height);
 	if (evaspixmapsink->aligned_width == 0 || evaspixmapsink->aligned_height == 0) {
 		GST_INFO_OBJECT (evaspixmapsink,"aligned size is zero. set size of caps.");
 		evaspixmapsink->aligned_width = evaspixmapbuf->width;
 		evaspixmapsink->aligned_height = evaspixmapbuf->height;
 	}
-#endif
 
 	evaspixmapbuf->im_format = gst_evaspixmapsink_get_format_from_caps (evaspixmapsink, caps);
 	if (evaspixmapbuf->im_format == -1) {
@@ -685,14 +727,11 @@ gst_evaspixmap_buffer_new (GstEvasPixmapSink *evaspixmapsink, GstCaps *caps)
 	if (evaspixmapsink->xcontext->use_xshm) {
 		int expected_size;
 		evaspixmapbuf->xvimage = XvShmCreateImage (evaspixmapsink->xcontext->disp, evaspixmapsink->xcontext->xv_port_id, evaspixmapbuf->im_format, NULL,
-#ifdef GST_EXT_XV_ENHANCEMENT
 		evaspixmapsink->aligned_width, evaspixmapsink->aligned_height, &evaspixmapbuf->SHMInfo);
 		if(!evaspixmapbuf->xvimage) {
 			GST_ERROR_OBJECT (evaspixmapsink,"XvShmCreateImage() failed");
 		}
-#else
-		evaspixmapbuf->width, evaspixmapbuf->height, &evaspixmapbuf->SHMInfo);
-#endif
+
 		if (!evaspixmapbuf->xvimage || error_caught) {
 			if (error_caught) {
 				GST_ERROR_OBJECT (evaspixmapsink,"error_caught!");
@@ -741,8 +780,6 @@ gst_evaspixmap_buffer_new (GstEvasPixmapSink *evaspixmapsink, GstCaps *caps)
 		case GST_MAKE_FOURCC ('U', 'Y', 'V', 'Y'):
 			expected_size = evaspixmapbuf->height * GST_ROUND_UP_4 (evaspixmapbuf->width * 2);
 			break;
-
-		#ifdef GST_EXT_XV_ENHANCEMENT
 		case GST_MAKE_FOURCC ('S', 'T', '1', '2'):
 		case GST_MAKE_FOURCC ('S', 'N', '1', '2'):
 		case GST_MAKE_FOURCC ('S', 'U', 'Y', 'V'):
@@ -751,7 +788,6 @@ gst_evaspixmap_buffer_new (GstEvasPixmapSink *evaspixmapsink, GstCaps *caps)
 		case GST_MAKE_FOURCC ('S', 'Y', 'V', 'Y'):
 			expected_size = sizeof(SCMN_IMGB);
 			break;
-		#endif
 		default:
 			expected_size = 0;
 			break;
@@ -816,11 +852,7 @@ gst_evaspixmap_buffer_new (GstEvasPixmapSink *evaspixmapsink, GstCaps *caps)
 #endif /* HAVE_XSHM */
 	{
 		evaspixmapbuf->xvimage = XvCreateImage (evaspixmapsink->xcontext->disp,	evaspixmapsink->xcontext->xv_port_id,
-#ifdef GST_EXT_XV_ENHANCEMENT
 		evaspixmapbuf->im_format, NULL, evaspixmapsink->aligned_width, evaspixmapsink->aligned_height);
-#else
-		evaspixmapbuf->im_format, NULL, evaspixmapbuf->width, evaspixmapbuf->height);
-#endif
 		if (!evaspixmapbuf->xvimage || error_caught) {
 			g_mutex_unlock (evaspixmapsink->x_lock);
 			/* Reset error handler */
@@ -869,14 +901,12 @@ gst_evaspixmap_buffer_put (GstEvasPixmapSink *evaspixmapsink, GstEvasPixmapBuffe
 {
 	GstVideoRectangle result;
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	GstVideoRectangle src_origin = { 0, 0, 0, 0};
 	GstVideoRectangle src_input  = { 0, 0, 0, 0};
 	GstVideoRectangle src = { 0, 0, 0, 0};
 	GstVideoRectangle dst = { 0, 0, 0, 0};
 	int rotate = 0;
 	int ret = 0;
-#endif
 
 	MMTA_ACUM_ITEM_BEGIN("evaspixmapsink evaspixmap_buffer_put", FALSE);
 
@@ -900,20 +930,32 @@ gst_evaspixmap_buffer_put (GstEvasPixmapSink *evaspixmapsink, GstEvasPixmapBuffe
 		return TRUE;
 	}
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	gst_evaspixmapsink_xpixmap_update_geometry( evaspixmapsink );
 
 	src.x = src.y = 0;
 	src_origin.x = src_origin.y = src_input.x = src_input.y = 0;
 	src_input.w = src_origin.w = evaspixmapsink->video_width;
 	src_input.h = src_origin.h = evaspixmapsink->video_height;
-	src.w = src_origin.w;
-	src.h = src_origin.h;
+	if (evaspixmapsink->use_origin_size ||
+		(evaspixmapsink->rotate_angle == DEGREE_0 ||
+		evaspixmapsink->rotate_angle == DEGREE_180)) {
+		src.w = src_origin.w;
+		src.h = src_origin.h;
+	} else {
+		src.w = src_origin.h;
+		src.h = src_origin.w;
+	}
 
 	dst.w = evaspixmapsink->render_rect.w; /* pixmap width */
 	dst.h = evaspixmapsink->render_rect.h; /* pixmap heighy */
 
 	if (!evaspixmapsink->use_origin_size) {
+		static Atom atom_rotation = None;
+		static Atom atom_hflip = None;
+		static Atom atom_vflip = None;
+		gboolean set_hflip = FALSE;
+		gboolean set_vflip = FALSE;
+
 		switch (evaspixmapsink->display_geometry_method) {
 		case DISP_GEO_METHOD_LETTER_BOX:
 			gst_video_sink_center_rect (src, dst, &result, TRUE);
@@ -925,13 +967,15 @@ gst_evaspixmap_buffer_put (GstEvasPixmapSink *evaspixmapsink, GstEvasPixmapBuffe
 			gst_video_sink_center_rect (src, dst, &result, FALSE);
 			gst_video_sink_center_rect (dst, src, &src_input, FALSE);
 			GST_DEBUG_OBJECT (evaspixmapsink, "GEO_METHOD : origin size");
-			break;
-		case DISP_GEO_METHOD_CROPPED_FULL_SCREEN:
-			GST_DEBUG_OBJECT (evaspixmapsink, "GEO_METHOD : cropped full screen");
-			gst_video_sink_center_rect(dst, src, &src_input, TRUE);
-			result.x = result.y = 0;
-			result.w = dst.w;
-			result.h = dst.h;
+			if (evaspixmapsink->rotate_angle == DEGREE_90 ||
+				evaspixmapsink->rotate_angle == DEGREE_270) {
+				src_input.x = src_input.x ^ src_input.y;
+				src_input.y = src_input.x ^ src_input.y;
+				src_input.x = src_input.x ^ src_input.y;
+				src_input.w = src_input.w ^ src_input.h;
+				src_input.h = src_input.w ^ src_input.h;
+				src_input.w = src_input.w ^ src_input.h;
+			}
 			break;
 		case DISP_GEO_METHOD_FULL_SCREEN:
 			result.x = result.y = 0;
@@ -939,41 +983,136 @@ gst_evaspixmap_buffer_put (GstEvasPixmapSink *evaspixmapsink, GstEvasPixmapBuffe
 			result.h = evaspixmapsink->xpixmap->height;
 			GST_DEBUG_OBJECT (evaspixmapsink, "GEO_METHOD : full screen");
 			break;
+		case DISP_GEO_METHOD_CROPPED_FULL_SCREEN:
+			GST_DEBUG_OBJECT (evaspixmapsink, "GEO_METHOD : cropped full screen");
+			gst_video_sink_center_rect(dst, src, &src_input, TRUE);
+			result.x = result.y = 0;
+			result.w = dst.w;
+			result.h = dst.h;
+			if (evaspixmapsink->rotate_angle == DEGREE_90 ||
+				evaspixmapsink->rotate_angle == DEGREE_270) {
+				src_input.x = src_input.x ^ src_input.y;
+				src_input.y = src_input.x ^ src_input.y;
+				src_input.x = src_input.x ^ src_input.y;
+				src_input.w = src_input.w ^ src_input.h;
+				src_input.h = src_input.w ^ src_input.h;
+				src_input.w = src_input.w ^ src_input.h;
+			}
+			break;
 		case DISP_GEO_METHOD_CUSTOM_ROI:
-			result.x = evaspixmapsink->dst_roi.x;
-			result.y = evaspixmapsink->dst_roi.y;
-			result.w = evaspixmapsink->dst_roi.w;
-			result.h = evaspixmapsink->dst_roi.h;
-			GST_DEBUG_OBJECT (evaspixmapsink, "GEO_METHOD : custom roi");
+			switch (evaspixmapsink->rotate_angle) {
+			case DEGREE_90:
+				result.w = evaspixmapsink->dst_roi.h;
+				result.h = evaspixmapsink->dst_roi.w;
+				result.x = evaspixmapsink->dst_roi.y;
+				result.y = evaspixmapsink->xpixmap->height - evaspixmapsink->dst_roi.x - evaspixmapsink->dst_roi.w;
+				break;
+			case DEGREE_180:
+				result.w = evaspixmapsink->dst_roi.w;
+				result.h = evaspixmapsink->dst_roi.h;
+				result.x = evaspixmapsink->xpixmap->width - result.w - evaspixmapsink->dst_roi.x;
+				result.y = evaspixmapsink->xpixmap->height - result.h - evaspixmapsink->dst_roi.y;
+				break;
+			case DEGREE_270:
+				result.w = evaspixmapsink->dst_roi.h;
+				result.h = evaspixmapsink->dst_roi.w;
+				result.x = evaspixmapsink->xpixmap->width - evaspixmapsink->dst_roi.y - evaspixmapsink->dst_roi.h;
+				result.y = evaspixmapsink->dst_roi.x;
+				break;
+			default:
+				result.x = evaspixmapsink->dst_roi.x;
+				result.y = evaspixmapsink->dst_roi.y;
+				result.w = evaspixmapsink->dst_roi.w;
+				result.h = evaspixmapsink->dst_roi.h;
+				break;
+			}
+			GST_LOG_OBJECT(evaspixmapsink, "rotate[%d], ROI input[%d,%d,%dx%d] > result[%d,%d,%dx%d]",
+					evaspixmapsink->rotate_angle,
+					evaspixmapsink->dst_roi.x, evaspixmapsink->dst_roi.y, evaspixmapsink->dst_roi.w, evaspixmapsink->dst_roi.h,
+					result.x, result.y, result.w, result.h);
 			break;
 		default:
 			break;
 		}
 		GST_DEBUG_OBJECT (evaspixmapsink, "GEO_METHOD : src(%dx%d), dst(%dx%d), result(%dx%d), result_x(%d), result_y(%d)",
 				src.w,src.h,dst.w,dst.h,result.w,result.h,result.x,result.y);
+
+		switch( evaspixmapsink->rotate_angle ) {
+			case DEGREE_0:
+			break;
+			case DEGREE_90:
+			rotate = 270;
+			break;
+			case DEGREE_180:
+			rotate = 180;
+			break;
+			case DEGREE_270:
+			rotate = 90;
+			break;
+			default:
+			GST_WARNING_OBJECT( evaspixmapsink, "Unsupported rotation [%d]... set DEGREE 0.",
+					evaspixmapsink->rotate_angle );
+			break;
+		}
+
+		/* set display rotation */
+		if (atom_rotation == None) {
+			atom_rotation = XInternAtom(evaspixmapsink->xcontext->disp, "_USER_WM_PORT_ATTRIBUTE_ROTATION", False);
+		}
+
+		ret = XvSetPortAttribute(evaspixmapsink->xcontext->disp, evaspixmapsink->xcontext->xv_port_id, atom_rotation, rotate);
+		if (ret != Success) {
+			GST_ERROR_OBJECT( evaspixmapsink, "XvSetPortAttribute failed[%d]. disp[%x],xv_port_id[%d],atom[%x],rotate[%d]",
+					ret, evaspixmapsink->xcontext->disp, evaspixmapsink->xcontext->xv_port_id, atom_rotation, rotate );
+			return FALSE;
+		}
+
+		/* set display flip */
+		if (atom_hflip == None) {
+			atom_hflip = XInternAtom(evaspixmapsink->xcontext->disp, "_USER_WM_PORT_ATTRIBUTE_HFLIP", False);
+		}
+		if (atom_vflip == None) {
+			atom_vflip = XInternAtom(evaspixmapsink->xcontext->disp, "_USER_WM_PORT_ATTRIBUTE_VFLIP", False);
+		}
+
+		switch (evaspixmapsink->flip) {
+		case FLIP_HORIZONTAL:
+			set_hflip = TRUE;
+			set_vflip = FALSE;
+			break;
+		case FLIP_VERTICAL:
+			set_hflip = FALSE;
+			set_vflip = TRUE;
+			break;
+		case FLIP_BOTH:
+			set_hflip = TRUE;
+			set_vflip = TRUE;
+			break;
+		case FLIP_NONE:
+		default:
+			set_hflip = FALSE;
+			set_vflip = FALSE;
+			break;
+		}
+		GST_INFO_OBJECT(evaspixmapsink, "set rotate %d HFLIP %d, VFLIP %d", rotate, set_hflip, set_vflip);
+
+		ret = XvSetPortAttribute(evaspixmapsink->xcontext->disp, evaspixmapsink->xcontext->xv_port_id, atom_hflip, set_hflip);
+		if (ret != Success) {
+			GST_WARNING("set HFLIP failed[%d]. disp[%x],xv_port_id[%d],atom[%x],hflip[%d]",
+					ret, evaspixmapsink->xcontext->disp, evaspixmapsink->xcontext->xv_port_id, atom_hflip, set_hflip);
+		}
+		ret = XvSetPortAttribute(evaspixmapsink->xcontext->disp, evaspixmapsink->xcontext->xv_port_id, atom_vflip, set_vflip);
+		if (ret != Success) {
+			GST_WARNING("set VFLIP failed[%d]. disp[%x],xv_port_id[%d],atom[%x],vflip[%d]",
+					ret, evaspixmapsink->xcontext->disp, evaspixmapsink->xcontext->xv_port_id, atom_vflip, set_vflip);
+		}
+
 	} else {
 		result.x = result.y = 0;
 		result.w = evaspixmapsink->xpixmap->width;
 		result.h = evaspixmapsink->xpixmap->height;
-		GST_DEBUG_OBJECT (evaspixmapsink, "USE ORIGIN SIZE, no geometry method" );
+		GST_INFO_OBJECT (evaspixmapsink, "USE ORIGIN SIZE, no geometry method, no rotation/flip" );
 	}
-#else
-	if (evaspixmapsink->keep_aspect) {
-		GstVideoRectangle src, dst;
-		/* We use the calculated geometry from _setcaps as a source to respect
-		source and screen pixel aspect ratios. */
-		src.w = GST_VIDEO_SINK_WIDTH (evaspixmapsink);
-		src.h = GST_VIDEO_SINK_HEIGHT (evaspixmapsink);
-		dst.w = evaspixmapsink->render_rect.w;
-		dst.h = evaspixmapsink->render_rect.h;
-
-		gst_video_sink_center_rect (src, dst, &result, TRUE);
-		result.x += evaspixmapsink->render_rect.x;
-		result.y += evaspixmapsink->render_rect.y;
-	} else {
-		memcpy (&result, &evaspixmapsink->render_rect, sizeof (GstVideoRectangle));
-	}
-#endif
 
 	g_mutex_lock (evaspixmapsink->x_lock);
 
@@ -985,7 +1124,6 @@ gst_evaspixmap_buffer_put (GstEvasPixmapSink *evaspixmapsink, GstEvasPixmapBuffe
 				evaspixmapbuf->width, evaspixmapbuf->height,
 				evaspixmapsink->render_rect.w, evaspixmapsink->render_rect.h, evaspixmapbuf);
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	/* Trim as proper size */
 	if (src_input.w % 2 == 1) {
 		src_input.w += 1;
@@ -1015,19 +1153,6 @@ gst_evaspixmap_buffer_put (GstEvasPixmapSink *evaspixmapsink, GstEvasPixmapBuffe
 	} else {
 		GST_WARNING_OBJECT (evaspixmapsink, "visible is FALSE. skip this image..." );
 	}
-#else /* GST_EXT_XV_ENHANCEMENT */
-	if (evaspixmapsink->visible) {
-	XvShmPutImage (evaspixmapsink->xcontext->disp,
-		evaspixmapsink->xcontext->xv_port_id,
-		evaspixmapsink->xpixmap->pixmap,
-		evaspixmapsink->xpixmap->gc, evaspixmapbuf->xvimage,
-		evaspixmapsink->disp_x, evaspixmapsink->disp_y,
-		evaspixmapsink->disp_width, evaspixmapsink->disp_height,
-		result.x, result.y, result.w, result.h, FALSE);
-	} else {
-		GST_WARNING_OBJECT (evaspixmapsink, "visible is FALSE. skip this image..." );
-	}
-#endif /* GST_EXT_XV_ENHANCEMENT */
   } else
 #endif /* HAVE_XSHM */
 	{
@@ -1273,7 +1398,6 @@ gst_evaspixmapsink_xpixmap_destroy (GstEvasPixmapSink *evaspixmapsink, GstXPixma
 static void
 gst_evaspixmapsink_xpixmap_update_geometry (GstEvasPixmapSink *evaspixmapsink)
 {
-#ifdef GST_EXT_XV_ENHANCEMENT
 	Window root_window;
 	XWindowAttributes root_attr;
 
@@ -1283,9 +1407,7 @@ gst_evaspixmapsink_xpixmap_update_geometry (GstEvasPixmapSink *evaspixmapsink)
 	unsigned int cur_pixmap_height = 0;
 	unsigned int cur_pixmap_border_width = 0;
 	unsigned int cur_pixmap_depth = 0;
-#else
-	XWindowAttributes attr;
-#endif
+
 	g_return_if_fail (GST_IS_EVASPIXMAPSINK (evaspixmapsink));
 
 	/* Update the window geometry */
@@ -1295,7 +1417,6 @@ gst_evaspixmapsink_xpixmap_update_geometry (GstEvasPixmapSink *evaspixmapsink)
 		return;
 	}
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	/* Get root window and size of current pixmap */
 	XGetGeometry( evaspixmapsink->xcontext->disp, evaspixmapsink->xpixmap->pixmap, &root_window,
 			&cur_pixmap_x, &cur_pixmap_y, /* relative x, y, for pixmap these are alway 0 */
@@ -1326,18 +1447,7 @@ gst_evaspixmapsink_xpixmap_update_geometry (GstEvasPixmapSink *evaspixmapsink)
 			evaspixmapsink->xpixmap->width, evaspixmapsink->xpixmap->height,
 			evaspixmapsink->render_rect.x, evaspixmapsink->render_rect.y,
 			evaspixmapsink->render_rect.w, evaspixmapsink->render_rect.h);
-#else
-	XGetWindowAttributes (evaspixmapsink->xcontext->disp, evaspixmapsink->xpixmap->pixmap, &attr);
 
-	evaspixmapsink->xpixmap->width = attr.width;
-	evaspixmapsink->xpixmap->height = attr.height;
-
-	if (!evaspixmapsink->have_render_rect) {
-		evaspixmapsink->render_rect.x = evaspixmapsink->render_rect.y = 0;
-		evaspixmapsink->render_rect.w = attr.width;
-		evaspixmapsink->render_rect.h = attr.height;
-	}
-#endif
 	g_mutex_unlock (evaspixmapsink->x_lock);
 }
 
@@ -1626,10 +1736,8 @@ gst_evaspixmapsink_get_xv_support (GstEvasPixmapSink *evaspixmapsink, GstXContex
     if (strcmp (encodings[i].name, "XV_IMAGE") == 0) {
       max_w = encodings[i].width;
       max_h = encodings[i].height;
-#ifdef GST_EXT_XV_ENHANCEMENT
       evaspixmapsink->scr_w = max_w;
       evaspixmapsink->scr_h = max_h;
-#endif
     }
   }
 
@@ -1957,13 +2065,13 @@ gst_evaspixmapsink_xcontext_get (GstEvasPixmapSink *evaspixmapsink)
 		/* GST_ELEMENT_ERROR is thrown by gst_evaspixmapsink_get_xv_support */
 		return NULL;
 	}
-	#ifdef HAVE_XSHM
+#ifdef HAVE_XSHM
 	/* Search for XShm extension support */
 	if (XShmQueryExtension (xcontext->disp) && gst_evaspixmapsink_check_xshm_calls (xcontext)) {
 		xcontext->use_xshm = TRUE;
 		GST_DEBUG_OBJECT (evaspixmapsink,"evaspixmapsink is using XShm extension");
 	} else
-	#endif /* HAVE_XSHM */
+#endif /* HAVE_XSHM */
 	{
 		xcontext->use_xshm = FALSE;
 		GST_DEBUG_OBJECT (evaspixmapsink,"evaspixmapsink is not using XShm extension");
@@ -2158,9 +2266,7 @@ gst_evaspixmapsink_setcaps (GstBaseSink *bsink, GstCaps *caps)
 	const GValue *caps_disp_reg;
 	const GValue *fps;
 	guint num, den;
-#ifdef GST_EXT_XV_ENHANCEMENT
 	gboolean enable_last_buffer;
-#endif
 
 	evaspixmapsink = GST_EVASPIXMAPSINK (bsink);
 
@@ -2180,7 +2286,6 @@ gst_evaspixmapsink_setcaps (GstBaseSink *bsink, GstCaps *caps)
 		goto incomplete_caps;
 	}
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	evaspixmapsink->aligned_width = video_width;
 	evaspixmapsink->aligned_height = video_height;
 
@@ -2193,7 +2298,6 @@ gst_evaspixmapsink_setcaps (GstBaseSink *bsink, GstCaps *caps)
 		g_object_set(G_OBJECT(evaspixmapsink), "enable-last-buffer", FALSE, NULL);
 		g_object_set(G_OBJECT(evaspixmapsink), "enable-last-buffer", TRUE, NULL);
 	}
-#endif
 
 	evaspixmapsink->fps_n = gst_value_get_fraction_numerator (fps);
 	evaspixmapsink->fps_d = gst_value_get_fraction_denominator (fps);
@@ -2446,23 +2550,19 @@ static GstFlowReturn
 gst_evaspixmapsink_show_frame (GstVideoSink *vsink, GstBuffer *buf)
 {
 	GstEvasPixmapSink *evaspixmapsink;
-#ifdef GST_EXT_XV_ENHANCEMENT
 	XV_PUTIMAGE_DATA_PTR img_data = NULL;
 	SCMN_IMGB *scmn_imgb = NULL;
 	gint format = 0;
-#endif
+
 	evaspixmapsink = GST_EVASPIXMAPSINK (vsink);
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	if( evaspixmapsink->stop_video ) {
 		GST_INFO_OBJECT (evaspixmapsink, "Stop video is TRUE. so skip show frame..." );
 		return GST_FLOW_OK;
 	}
-#endif
 
 	if (!evaspixmapsink->evas_pixmap_buf) {
 		GST_DEBUG_OBJECT (evaspixmapsink,"creating our evaspixmap buffer");
-#ifdef GST_EXT_XV_ENHANCEMENT
 		format = gst_evaspixmapsink_get_format_from_caps(evaspixmapsink, GST_BUFFER_CAPS(buf));
 		switch (format) {
 		case GST_MAKE_FOURCC('S', 'T', '1', '2'):
@@ -2491,7 +2591,6 @@ gst_evaspixmapsink_show_frame (GstVideoSink *vsink, GstBuffer *buf)
 			GST_INFO_OBJECT (evaspixmapsink,"Use original width,height of caps");
 			break;
 		}
-#endif
 		evaspixmapsink->evas_pixmap_buf = gst_evaspixmap_buffer_new (evaspixmapsink, GST_BUFFER_CAPS (buf));
 		if (!evaspixmapsink->evas_pixmap_buf) {
 			/* The create method should have posted an informative error */
@@ -2505,7 +2604,6 @@ gst_evaspixmapsink_show_frame (GstVideoSink *vsink, GstBuffer *buf)
 		}
 	}
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	switch (evaspixmapsink->evas_pixmap_buf->im_format) {
 	/* Cases for specified formats of Samsung extension */
 	case GST_MAKE_FOURCC('S', 'T', '1', '2'):
@@ -2563,9 +2661,6 @@ gst_evaspixmapsink_show_frame (GstVideoSink *vsink, GstBuffer *buf)
 		break;
 	}
 	}
-#else
-	__ta__("evaspixmapsink memcpy in _show_frame", memcpy (evaspixmapsink->evas_pixmap_buf->xvimage->data, GST_BUFFER_DATA (buf), MIN (GST_BUFFER_SIZE (buf), evaspixmapsink->evas_pixmap_buf->size)););
-#endif
 	if (!gst_evaspixmap_buffer_put (evaspixmapsink, evaspixmapsink->evas_pixmap_buf)) {
 		goto no_pixmap;
 	}
@@ -2643,21 +2738,6 @@ gst_evaspixmapsink_navigation_send_event (GstNavigation *navigation, GstStructur
     if (!evaspixmapsink->xpixmap) {
       g_mutex_unlock (evaspixmapsink->flow_lock);
       return;
-    }
-
-    if (evaspixmapsink->keep_aspect) {
-      /* We get the frame position using the calculated geometry from _setcaps
-         that respect pixel aspect ratios */
-      src.w = GST_VIDEO_SINK_WIDTH (evaspixmapsink);
-      src.h = GST_VIDEO_SINK_HEIGHT (evaspixmapsink);
-      dst.w = evaspixmapsink->render_rect.w;
-      dst.h = evaspixmapsink->render_rect.h;
-
-      gst_video_sink_center_rect (src, dst, &result, TRUE);
-      result.x += evaspixmapsink->render_rect.x;
-      result.y += evaspixmapsink->render_rect.y;
-    } else {
-      memcpy (&result, &evaspixmapsink->render_rect, sizeof (GstVideoRectangle));
     }
 
     g_mutex_unlock (evaspixmapsink->flow_lock);
@@ -2978,7 +3058,6 @@ gst_evaspixmapsink_xpixmap_link (GstEvasPixmapSink *evaspixmapsink)
 		evaspixmapsink->w = xw;
 		evaspixmapsink->h = xh;
 	}
-	evas_object_image_size_set(evaspixmapsink->eo, evaspixmapsink->w, evaspixmapsink->h);
 
 	/* create xpixmap structure */
 	if (!evaspixmapsink->xpixmap) {
@@ -3036,6 +3115,7 @@ gst_evaspixmapsink_xpixmap_link (GstEvasPixmapSink *evaspixmapsink)
 		evaspixmapsink->damage = NULL;
 	}
 	evaspixmapsink->damage = XDamageCreate (dpy, evaspixmapsink->xpixmap->pixmap, XDamageReportRawRectangles);
+	XSync(dpy, FALSE);
 
 	/* Set flag for mapping evas object with xpixmap */
 	evaspixmapsink->do_link = TRUE;
@@ -3104,9 +3184,6 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 		}
 		GST_DEBUG_OBJECT (evaspixmapsink,"set PAR to %d/%d", gst_value_get_fraction_numerator (evaspixmapsink->par), gst_value_get_fraction_denominator (evaspixmapsink->par));
 		break;
-	case PROP_FORCE_ASPECT_RATIO:
-		evaspixmapsink->keep_aspect = g_value_get_boolean (value);
-		break;
 	case PROP_DEVICE:
 		evaspixmapsink->adaptor_no = atoi (g_value_get_string (value));
 		break;
@@ -3131,22 +3208,26 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 			/* To do : code related to pixmap re-link */
 		}
 		break;
-#ifdef GST_EXT_XV_ENHANCEMENT
 	case PROP_DISPLAY_GEOMETRY_METHOD:
-		evaspixmapsink->display_geometry_method = g_value_get_enum (value);
-		GST_INFO_OBJECT (evaspixmapsink,"Overlay geometry method update, display_geometry_method(%d)",evaspixmapsink->display_geometry_method);
-		if( evaspixmapsink->display_geometry_method != DISP_GEO_METHOD_FULL_SCREEN &&
-			  evaspixmapsink->display_geometry_method != DISP_GEO_METHOD_CROPPED_FULL_SCREEN ) {
-			if( evaspixmapsink->xcontext && evaspixmapsink->xpixmap ) {
-				g_mutex_lock( evaspixmapsink->flow_lock );
-				gst_evaspixmapsink_xpixmap_clear (evaspixmapsink, evaspixmapsink->xpixmap);
-				g_mutex_unlock( evaspixmapsink->flow_lock );
+	{
+		guint new_val = g_value_get_enum (value);
+		if (evaspixmapsink->display_geometry_method != new_val) {
+			evaspixmapsink->display_geometry_method = new_val;
+			GST_INFO_OBJECT (evaspixmapsink,"Overlay geometry method update, display_geometry_method(%d)",evaspixmapsink->display_geometry_method);
+			if( evaspixmapsink->display_geometry_method != DISP_GEO_METHOD_FULL_SCREEN &&
+				  evaspixmapsink->display_geometry_method != DISP_GEO_METHOD_CROPPED_FULL_SCREEN ) {
+				if( evaspixmapsink->xcontext && evaspixmapsink->xpixmap ) {
+					g_mutex_lock( evaspixmapsink->flow_lock );
+					gst_evaspixmapsink_xpixmap_clear (evaspixmapsink, evaspixmapsink->xpixmap);
+					g_mutex_unlock( evaspixmapsink->flow_lock );
+				}
+			}
+			if (evaspixmapsink->xcontext) {
+				gst_evaspixmap_buffer_put (evaspixmapsink, evaspixmapsink->evas_pixmap_buf);
 			}
 		}
-		if (evaspixmapsink->xcontext) {
-			gst_evaspixmap_buffer_put (evaspixmapsink, evaspixmapsink->evas_pixmap_buf);
-		}
 		break;
+	}
 	case PROP_DST_ROI_X:
 		evaspixmapsink->dst_roi.x = g_value_get_int (value);
 		GST_INFO_OBJECT (evaspixmapsink, "ROI_X(%d)",evaspixmapsink->dst_roi.x );
@@ -3172,7 +3253,6 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 		}
 		g_mutex_unlock( evaspixmapsink->flow_lock );
 		break;
-#endif
 	case PROP_EVAS_OBJECT:
 		eo = g_value_get_pointer (value);
 		if ( is_evas_image_object (eo)) {
@@ -3203,6 +3283,12 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 			GST_ERROR_OBJECT (evaspixmapsink,"Cannot set evas-object property: value is not an evas image object");
 		}
 		  break;
+	case PROP_FLIP:
+		evaspixmapsink->flip = g_value_get_enum(value);
+		break;
+	case PROP_ROTATE_ANGLE:
+		evaspixmapsink->rotate_angle = g_value_get_enum (value);
+		break;
 	case PROP_VISIBLE:
 		evaspixmapsink->visible = g_value_get_boolean (value);
 		if (evaspixmapsink->eo) {
@@ -3225,11 +3311,11 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 	case PROP_ORIGIN_SIZE:
 		evaspixmapsink->use_origin_size = g_value_get_boolean (value);
 		GST_INFO_OBJECT (evaspixmapsink,"set origin-size (%d)",evaspixmapsink->use_origin_size);
-		if (evaspixmapsink->former_origin_size != evaspixmapsink->use_origin_size) {
+		if (evaspixmapsink->previous_origin_size != evaspixmapsink->use_origin_size) {
 			if (!gst_evaspixmapsink_xpixmap_link(evaspixmapsink)) {
 				GST_WARNING_OBJECT (evaspixmapsink,"link evas image object with pixmap failed...");
 			}
-			evaspixmapsink->former_origin_size = evaspixmapsink->use_origin_size;
+			evaspixmapsink->previous_origin_size = evaspixmapsink->use_origin_size;
 		}
 		break;
 	default:
@@ -3273,9 +3359,6 @@ gst_evaspixmapsink_get_property (GObject *object, guint prop_id, GValue *value, 
 			}
 		}
 		break;
-	case PROP_FORCE_ASPECT_RATIO:
-		g_value_set_boolean (value, evaspixmapsink->keep_aspect);
-		break;
 	case PROP_DEVICE:
 	{
 		char *adaptor_no_s = g_strdup_printf ("%u", evaspixmapsink->adaptor_no);
@@ -3314,7 +3397,6 @@ gst_evaspixmapsink_get_property (GObject *object, guint prop_id, GValue *value, 
 			g_value_set_uint64 (value, 0);
 		}
 		break;
-#ifdef GST_EXT_XV_ENHANCEMENT
 	case PROP_DISPLAY_GEOMETRY_METHOD:
 		g_value_set_enum (value, evaspixmapsink->display_geometry_method);
 		break;
@@ -3333,9 +3415,14 @@ gst_evaspixmapsink_get_property (GObject *object, guint prop_id, GValue *value, 
 	case PROP_STOP_VIDEO:
 		g_value_set_int (value, evaspixmapsink->stop_video);
 		break;
-#endif
 	case PROP_EVAS_OBJECT:
 		g_value_set_pointer (value, evaspixmapsink->eo);
+		break;
+	case PROP_FLIP:
+		g_value_set_enum(value, evaspixmapsink->flip);
+		break;
+	case PROP_ROTATE_ANGLE:
+		g_value_set_enum (value, evaspixmapsink->rotate_angle);
 		break;
 	case PROP_VISIBLE:
 		g_value_set_boolean (value, evaspixmapsink->visible);
@@ -3464,7 +3551,6 @@ gst_evaspixmapsink_init (GstEvasPixmapSink *evaspixmapsink)
 
 	evaspixmapsink->synchronous = FALSE;
 	evaspixmapsink->double_buffer = TRUE;
-	evaspixmapsink->keep_aspect = FALSE;
 	evaspixmapsink->par = NULL;
 	evaspixmapsink->autopaint_colorkey = TRUE;
 	evaspixmapsink->running = FALSE;
@@ -3475,7 +3561,6 @@ gst_evaspixmapsink_init (GstEvasPixmapSink *evaspixmapsink)
 	*/
 	evaspixmapsink->colorkey = (8 << 16) | (8 << 8) | 16;
 
-#ifdef GST_EXT_XV_ENHANCEMENT
 	evaspixmapsink->display_geometry_method = DEF_DISPLAY_GEOMETRY_METHOD;
 	evaspixmapsink->dst_roi.x = 0;
 	evaspixmapsink->dst_roi.y = 0;
@@ -3485,14 +3570,15 @@ gst_evaspixmapsink_init (GstEvasPixmapSink *evaspixmapsink)
 	evaspixmapsink->scr_h = 0;
 	evaspixmapsink->aligned_width = 0;
 	evaspixmapsink->aligned_height = 0;
-#endif
 	evaspixmapsink->stop_video = FALSE;
 	evaspixmapsink->eo = NULL;
 	evaspixmapsink->epipe = NULL;
 	evaspixmapsink->do_link = FALSE;
+	evaspixmapsink->flip = DEF_DISPLAY_FLIP;
+	evaspixmapsink->rotate_angle = DEGREE_0;
 	evaspixmapsink->visible = TRUE;
 	evaspixmapsink->use_origin_size = FALSE;
-	evaspixmapsink->former_origin_size = FALSE;
+	evaspixmapsink->previous_origin_size = FALSE;
 
 	MMTA_INIT();
  }
@@ -3554,10 +3640,6 @@ gst_evaspixmapsink_class_init (GstEvasPixmapSinkClass *klass)
       g_param_spec_string ("pixel-aspect-ratio", "Pixel Aspect Ratio",
           "The pixel aspect ratio of the device", "1/1",
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-  g_object_class_install_property (gobject_class, PROP_FORCE_ASPECT_RATIO,
-      g_param_spec_boolean ("force-aspect-ratio", "Force aspect ratio",
-          "When enabled, scaling will respect original aspect ratio", FALSE,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_DEVICE,
       g_param_spec_string ("device", "Adaptor number",
           "The number of the video adaptor", "0",
@@ -3617,7 +3699,6 @@ gst_evaspixmapsink_class_init (GstEvasPixmapSinkClass *klass)
   g_object_class_install_property (gobject_class, PROP_PIXMAP_HEIGHT,
       g_param_spec_uint64 ("pixmap-height", "pixmap-height", "Height of the pixmap", 0, G_MAXUINT64, 0, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 
-#ifdef GST_EXT_XV_ENHANCEMENT
   /**
    * GstEvasPixmapSink:display-geometry-method
    *
@@ -3676,7 +3757,6 @@ gst_evaspixmapsink_class_init (GstEvasPixmapSinkClass *klass)
    */
   g_object_class_install_property (gobject_class, PROP_STOP_VIDEO,
       g_param_spec_int ("stop-video", "Stop-Video", "Stop video for releasing video source buffer", 0, 1, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-#endif
 
   /**
    * GstEvasPixmapSink:evas-object
@@ -3684,7 +3764,26 @@ gst_evaspixmapsink_class_init (GstEvasPixmapSinkClass *klass)
    * Evas image object for rendering
    */
   g_object_class_install_property (gobject_class, PROP_EVAS_OBJECT,
-	g_param_spec_pointer ("evas-object", "Destination Evas Object",	"Destination evas image object", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+    g_param_spec_pointer ("evas-object", "Destination Evas Object",	"Destination evas image object", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  /**
+   * GstEvasPixmapSink:display-flip
+   *
+   * Display flip setting
+   */
+  g_object_class_install_property(gobject_class, PROP_FLIP,
+    g_param_spec_enum("flip", "Display flip",
+      "Flip for display",
+      GST_TYPE_EVASPIXMAPSINK_FLIP, DEF_DISPLAY_FLIP,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  /**
+   * GstEvasPixmapSink:rotate
+   *
+   * draw rotation angle setting
+   */
+  g_object_class_install_property(gobject_class, PROP_ROTATE_ANGLE,
+    g_param_spec_enum("rotate", "Rotate angle", "Rotate angle of display output",GST_TYPE_EVASPIXMAPSINK_ROTATE_ANGLE, DEGREE_0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   /**
    * GstEvasPixmapSink:visible
