@@ -226,7 +226,7 @@ static void gst_xv_image_out_buffer_class_init(gpointer g_class, gpointer class_
 static void gst_xv_image_out_buffer_finalize(GstXvImageOutBuffer *buffer);
 static GstXvImageOutBuffer *gst_xv_image_out_buffer_new(GstXVImageSrc *src);
 #endif
-
+static GstStateChangeReturn gst_xv_image_src_change_state (GstElement * element, GstStateChange transition);
 static void gst_xv_image_src_finalize (GObject * gobject);
 
 static void gst_xv_image_src_set_property (GObject *object, guint prop_id, const GValue * value, GParamSpec * pspec);
@@ -297,6 +297,40 @@ static GType gst_xv_image_out_buffer_get_type(void)
  int value[5] ={0};
  static int value_count =0;
 #endif
+
+static GstStateChangeReturn
+gst_xv_image_src_change_state (GstElement * element, GstStateChange transition)
+{
+  GstXVImageSrc *src = GST_XV_IMAGE_SRC (element);
+
+  GstStateChangeReturn result = GST_STATE_CHANGE_FAILURE;
+  switch (transition) {
+  case GST_STATE_CHANGE_NULL_TO_READY:
+    break;
+  case GST_STATE_CHANGE_READY_TO_PAUSED:
+    break;
+  case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
+    src->pause_cond_var = FALSE;
+    g_cond_signal(src->pause_cond);
+    break;
+  case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
+    src->pause_cond_var = TRUE;
+    break;
+  case GST_STATE_CHANGE_PAUSED_TO_READY:
+    src->thread_return = TRUE;
+    g_cond_signal(src->pause_cond);
+    g_cond_signal(src->queue_cond);
+    break;
+  case GST_STATE_CHANGE_READY_TO_NULL:
+    break;
+  default :
+    break;
+  }
+  result = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+  return result;
+}
+
+
 static void gst_xv_image_out_buffer_finalize(GstXvImageOutBuffer *buffer)
 {
   Atom atom_retbuf = 0;
@@ -305,7 +339,7 @@ static void gst_xv_image_out_buffer_finalize(GstXvImageOutBuffer *buffer)
   XvSetPortAttribute (buffer->xvimagesrc->dpy, buffer->xvimagesrc->p, atom_retbuf, buffer->YBuf);  //data->YBuf is gemname, refer to drm_convert_gem_to_fd
   g_mutex_unlock (buffer->xvimagesrc->dpy_lock);
   g_cond_signal(buffer->xvimagesrc->buffer_cond);
-  GST_ERROR("############## xvimagesrc = %p, gem_name =%d, fd_name =%d", buffer->xvimagesrc, buffer->YBuf, buffer->fd_name);
+  GST_INFO(" xvimagesrc = %p, gem_name =%d, fd_name =%d", buffer->xvimagesrc, buffer->YBuf, buffer->fd_name);
 #ifdef DEBUG_BUFFER
  int i = 0;
  for(i=0 ; i<5; i++){
@@ -355,7 +389,9 @@ gst_xv_image_src_class_init (GstXVImageSrcClass * klass)
   GObjectClass *gobject_class;
   GstBaseSrcClass *gstbasesrc_class;
   GstPushSrcClass *gstpushsrc_class;
+  GstElementClass *gstelement_class;
   gobject_class = G_OBJECT_CLASS (klass);
+  gstelement_class = (GstElementClass *) klass;
   gstbasesrc_class = (GstBaseSrcClass *) klass;
   gstpushsrc_class = (GstPushSrcClass *) klass;
   gobject_class->set_property = gst_xv_image_src_set_property;
@@ -371,6 +407,7 @@ gst_xv_image_src_class_init (GstXVImageSrcClass * klass)
   gstbasesrc_class->query = GST_DEBUG_FUNCPTR (gst_xv_image_src_query);
   gstbasesrc_class->set_caps = GST_DEBUG_FUNCPTR (gst_xv_image_src_setcaps);
   gstpushsrc_class->create = GST_DEBUG_FUNCPTR (gst_xv_image_src_create);
+  gstelement_class->change_state = GST_DEBUG_FUNCPTR (gst_xv_image_src_change_state);
 
   gst_xv_image_src_signals[SIGNAL_VIDEO_WITH_UI] =
      g_signal_new ("video-with-ui", G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_LAST,
@@ -509,7 +546,10 @@ gst_xv_image_src_init (GstXVImageSrc * src, GstXVImageSrcClass * g_class)
   src->cond_lock = g_mutex_new ();
   src->buffer_cond = g_cond_new ();
   src->buffer_cond_lock = g_mutex_new ();
+  src->pause_cond = g_cond_new ();
+  src->pause_cond_lock = g_mutex_new ();
   src->dpy_lock = g_mutex_new ();
+  src->pause_cond_var = FALSE;
   src->drm_fd = -1;
   src->current_data_type = VIDEO_TYPE_VIDEO_WITH_UI;
   src->new_data_type = VIDEO_TYPE_VIDEO_WITH_UI;
@@ -823,7 +863,7 @@ gst_xv_image_src_create (GstPushSrc * psrc, GstBuffer ** buffer)
     g_mutex_unlock (src->queue_lock);
     GST_INFO("g_cond_wait");
     g_cond_wait(src->queue_cond, src->cond_lock);
-    if(src->thread_return) return GST_FLOW_WRONG_STATE;
+    if(src->pause_cond_var) return GST_FLOW_WRONG_STATE;
     g_mutex_lock (src->queue_lock);
     outbuf = (GstXvImageOutBuffer *)g_queue_pop_head(src->queue);
     GST_INFO("g_queue_pop_head");
@@ -963,6 +1003,9 @@ static void* gst_xv_image_src_update_thread (void * asrc)
   GstXvImageOutBuffer *outbuf = NULL;
 
   while(!src->thread_return) {
+    if(src->pause_cond_var == TRUE) {
+      g_cond_wait(src->pause_cond,src->pause_cond_lock);
+    }
     duration = 0;
     starttime =0;
     endtime = 0;
@@ -984,10 +1027,10 @@ static void* gst_xv_image_src_update_thread (void * asrc)
     GST_DEBUG ("gst_xv_image_src_update_thread XSetErrorHandler in !!");
     handler = XSetErrorHandler (gst_xvimagesrc_handle_xerror);
     GST_INFO ("gst_xv_image_src_update_thread XSetErrorHandler !!");
-    GST_INFO ("gst_xv_image_src_update_thread XvGetStill in !!");
+    GST_INFO ("gst_xv_image_src_update_thread XvPutStill in !!");
     g_mutex_lock (src->dpy_lock);
-    XvGetStill (src->dpy, src->p, src->pixmap, src->gc, 0, 0, src->width, src->height, 0, 0, src->width, src->height);
-    GST_INFO ("gst_xv_image_src_update_thread XvGetStill !!");
+    XvPutStill (src->dpy, src->p, src->pixmap, src->gc, 0, 0, src->width, src->height, 0, 0, src->width, src->height);
+    GST_INFO ("gst_xv_image_src_update_thread XvPutStill !!");
     XSync (src->dpy, 0);
     g_mutex_unlock (src->dpy_lock);
     if (error_caught) {
@@ -1056,8 +1099,8 @@ next_event:
       gst_buffer_set_caps (outbuf, GST_PAD_CAPS (GST_BASE_SRC_PAD (src)));
       memcpy(GST_BUFFER_DATA (outbuf), src->virtual, src->framesize);
     } else if (src->format_id == FOURCC_SN12) {
-      XV_GETSTILL_DATA_PTR data = (XV_GETSTILL_DATA_PTR)src->virtual;
-      int error = XV_GETSTILL_VALIDATE_DATA (data);
+      XV_PUTSTILL_DATA_PTR data = (XV_PUTSTILL_DATA_PTR)src->virtual;
+      int error = XV_PUTSTILL_VALIDATE_DATA (data);
       outbuf = gst_xv_image_out_buffer_new(src);
       if(!outbuf)
       {
@@ -1152,7 +1195,7 @@ next_event:
       endtime =  end_time.tv_usec;
       GST_INFO("star_time: %d, end_time:%d", starttime, endtime);
       if (endtime > starttime) {
-        GST_ERROR("end_time > start_time");
+        GST_INFO("end_time > start_time");
         duration = endtime - starttime;
 	 } else {
 	 GST_INFO("end_time.tv_usec < start_time.tv_usec");
@@ -1160,7 +1203,7 @@ next_event:
 	 GST_INFO("end_time =%d", endtime);
         duration = endtime -starttime;
       }
-      GST_ERROR("end_time duration = %d", duration);
+      GST_INFO("end_time duration = %d", duration);
       gst_xv_get_image_sleep (src, duration);
       GST_INFO ("gst_xv_image_src_update_thread cleanup !!");
   }
@@ -1172,12 +1215,14 @@ next_event:
 	 return NULL;
       }
     }
-    /*fd close*/
-    if (xv_gem_mmap->fd[i]) {
+    if (xv_gem_mmap->handle[i]) {
 	gem_close.handle = xv_gem_mmap->handle[i];
-	if (ioctl(xv_gem_mmap->fd[i], DRM_IOCTL_GEM_CLOSE, &gem_close)) {
-		GST_ERROR("Gem Close failed");
+	if (ioctl(src->drm_fd, DRM_IOCTL_GEM_CLOSE, &gem_close)) {
+	  GST_ERROR("Gem Close failed");
 	}
+    }
+    if (xv_gem_mmap->fd[i]) {
+      close(xv_gem_mmap->fd[i]);
     }
   }
   if (xv_gem_mmap) {
@@ -1301,7 +1346,7 @@ static int port_get (GstXVImageSrc * src, unsigned int id)
   if (!ai) return -1;
   for (i = 0; i < adaptors; i++) {
     int support_format = False;
-    if (!(ai[i].type & XvStillMask)) continue;
+    if (!(ai[i].type & XvInputMask) || !(ai[i].type & XvStillMask)) continue;
     GST_LOG ("===========================================");
     GST_LOG (" name:        %s"
                 " first port:  %ld"
@@ -1418,9 +1463,7 @@ gst_xv_image_src_unlock (GstBaseSrc * bsrc)
 {
   GstXVImageSrc *src = GST_XV_IMAGE_SRC (bsrc);
   GST_DEBUG_OBJECT (src, "unlock()");
-  src->thread_return = TRUE;
   g_cond_signal(src->queue_cond);
-  g_cond_signal(src->buffer_cond);
   return TRUE;
 }
 

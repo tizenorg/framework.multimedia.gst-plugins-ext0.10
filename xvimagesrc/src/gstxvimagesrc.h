@@ -105,6 +105,9 @@ struct _GstXVImageSrc {
   GCond *queue_cond;
   GMutex *cond_lock;
   GCond *buffer_cond;
+  gboolean pause_cond_var;
+  GCond *pause_cond;
+  GMutex *pause_cond_lock;
   GMutex *buffer_cond_lock;
   GMutex *dpy_lock;
   gint drm_fd;

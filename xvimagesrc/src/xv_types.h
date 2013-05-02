@@ -43,8 +43,8 @@ G_BEGIN_DECLS
 #define XV_PUTIMAGE_HEADER	0xDEADCD01
 #define XV_PUTIMAGE_VERSION	0x00010001
 
-#define XV_GETSTILL_HEADER	0xDEADCD02
-#define XV_GETSTILL_VERSION	0x00010001
+#define XV_PUTSTILL_HEADER	0xDEADCD02
+#define XV_PUTSTILL_VERSION	0x00010001
 
 /* Return Values */
 #define XV_OK 0
@@ -79,7 +79,7 @@ typedef struct
 
     unsigned int BufIndex;
     unsigned int BufType;
-} XV_GETSTILL_DATA, * XV_GETSTILL_DATA_PTR;
+} XV_PUTSTILL_DATA, * XV_PUTSTILL_DATA_PTR;
 
 static void
 #ifdef __GNUC__
@@ -109,10 +109,10 @@ static void
 #ifdef __GNUC__
 __attribute__ ((unused))
 #endif
-XV_GETSTILL_INIT_DATA (XV_GETSTILL_DATA_PTR data)
+XV_PUTSTILL_INIT_DATA (XV_PUTSTILL_DATA_PTR data)
 {
-    data->_header = XV_GETSTILL_HEADER;
-    data->_version = XV_GETSTILL_VERSION;
+    data->_header = XV_PUTSTILL_HEADER;
+    data->_version = XV_PUTSTILL_VERSION;
 }
 
 
@@ -120,11 +120,11 @@ static int
 #ifdef __GNUC__
 __attribute__ ((unused))
 #endif
-XV_GETSTILL_VALIDATE_DATA (XV_GETSTILL_DATA_PTR data)
+XV_PUTSTILL_VALIDATE_DATA (XV_PUTSTILL_DATA_PTR data)
 {
-    if (data->_header != XV_GETSTILL_HEADER)
+    if (data->_header != XV_PUTSTILL_HEADER)
         return XV_HEADER_ERROR;
-    if (data->_version != XV_GETSTILL_VERSION)
+    if (data->_version != XV_PUTSTILL_VERSION)
         return XV_VERSION_MISMATCH;
     return XV_OK;
 }
