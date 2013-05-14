@@ -2740,6 +2740,8 @@ gst_evaspixmapsink_navigation_send_event (GstNavigation *navigation, GstStructur
       return;
     }
 
+    memcpy (&result, &evaspixmapsink->render_rect, sizeof (GstVideoRectangle));
+
     g_mutex_unlock (evaspixmapsink->flow_lock);
 
     /* We calculate scaling using the original video frames geometry to include
