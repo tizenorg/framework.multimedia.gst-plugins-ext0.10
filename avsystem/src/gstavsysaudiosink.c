@@ -568,7 +568,7 @@ gst_avsysaudiosink_prepare (GstAudioSink * asink, GstRingBufferSpec * spec)
 
 	if (gst_avsysaudiosink_avsys_open(avsys_audio) == FALSE) {
 		GST_ERROR_OBJECT(avsys_audio, "gst_avsysaudiosink_avsys_open() failed");
-		return FALSE;
+		goto OPEN_FAILED;
 	}
 
 	/* Ring buffer size */
@@ -605,6 +605,10 @@ spec_parse:
 						   ("Setting of swparams failed: " ));
 		return FALSE;
 	}
+
+OPEN_FAILED:
+	avsysaudiosink_post_message(avsys_audio, GST_RESOURCE_ERROR_OPEN_READ);
+	return FALSE;
 }
 
 static gboolean
@@ -749,7 +753,7 @@ gst_avsysaudiosink_avsys_open(GstAvsysAudioSink *avsys_audio)
 		avsys_result = avsys_audio_open(&avsys_audio->audio_param, &avsys_audio->audio_handle, &avsys_audio->avsys_size);
 		if (avsys_result != AVSYS_STATE_SUCCESS) {
 			GST_AVSYS_AUDIO_SINK_UNLOCK (avsys_audio);
-			avsysaudiosink_post_message(avsys_audio, avsys_result);
+			avsysaudiosink_post_message(avsys_audio, GST_RESOURCE_ERROR_OPEN_READ);
 			return FALSE;
 		}
 
@@ -886,7 +890,7 @@ avsysaudiosink_post_message(GstAvsysAudioSink* self,int errorcode)
 				error_code = errorcode;
 		else
 				error_code = GST_STREAM_ERROR_TYPE_NOT_FOUND; */
-		error_code = GST_RESOURCE_ERROR_FAILED;
+		error_code = errorcode;
 		domain = gst_resource_error_quark();
 		error = g_error_new (domain, error_code, "AVSYSAUDIOSINK_RESOURCE_ERROR");
 		Msg = gst_message_new_error(GST_ELEMENT(self), error, "AVSYSAUDIOSINK_ERROR");
