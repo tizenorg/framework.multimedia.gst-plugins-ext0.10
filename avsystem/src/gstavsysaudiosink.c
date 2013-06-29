@@ -183,13 +183,13 @@ static GstStaticPadTemplate avsysaudiosink_sink_factory =
 									 "signed = (boolean) { TRUE }, "
 									 "width = (int) 16, "
 									 "depth = (int) 16, "
-									 "rate = (int) [ 1, MAX ], "
+									 "rate = (int) 44100, "
 									 "channels = (int) [ 1, 6 ]; "
 									 "audio/x-raw-int, "
 									 "signed = (boolean) { FALSE }, "
 									 "width = (int) 8, "
 									 "depth = (int) 8, "
-									 "rate = (int) [ 1, MAX ], "
+									 "rate = (int) 44100, "
 									 "channels = (int) [ 1, 6 ] "
 								 )
 							 );
