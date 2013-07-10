@@ -1,5 +1,5 @@
 Name:       gst-plugins-ext0.10
-Version:    0.3.5
+Version:    0.3.6
 Summary:    GStreamer extra plugins (common)
 Release:    0
 Group:      libs
@@ -9,7 +9,6 @@ BuildRequires:  pkgconfig(avsysaudio)
 BuildRequires:  pkgconfig(camsrcjpegenc)
 BuildRequires:  pkgconfig(ecore)
 BuildRequires:  pkgconfig(ecore-x)
-BuildRequires:  pkgconfig(ecore-evas)
 BuildRequires:  pkgconfig(evas)
 BuildRequires:  pkgconfig(mm-ta)
 BuildRequires:  pkgconfig(gstreamer-plugins-base-0.10)

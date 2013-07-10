@@ -297,71 +297,6 @@ static int get_millis_time()
     return (tp.tv_sec * 1000) + (tp.tv_nsec / 1000000L);
 }
 
-
-static void
-ecore_evas_post_render_callback_handler(Ecore_Evas *ee)
-{
-	int temp_time = 0;
-	int i = 0;
-	guint idx = 0;
-	GstXPixmap *xpixmap = NULL;
-
-	GstEvasPixmapSink *evaspixmapsink = ecore_evas_data_get (ee, "evaspixmapsink_handle");
-	if (!evaspixmapsink) {
-		GST_WARNING ("could not get an evaspixmapsink handle");
-		return;
-	}
-	if (evaspixmapsink->last_updated_idx == -1) {
-		GST_WARNING_OBJECT (evaspixmapsink, "last_updated_id = -1, skip it");
-		return;
-	}
-
-	GST_DEBUG_OBJECT (evaspixmapsink, "[START] Ecore_Evas(0x%x), Evas_Object(0x%x)", ee, evaspixmapsink->eo);
-
-	MMTA_ACUM_ITEM_BEGIN("evaspixmapsink - ecore evas post render cb : TOTAL", FALSE);
-
-	g_mutex_lock (evaspixmapsink->pixmap_ref_lock);
-	/* find a oldest damaged pixmap */
-	for (i = 0; i < evaspixmapsink->num_of_pixmaps; i++) {
-		xpixmap = evaspixmapsink->xpixmap[i];
-		if (!xpixmap) {
-			g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
-			GST_WARNING_OBJECT (evaspixmapsink, "xpixmap is null..");
-			MMTA_ACUM_ITEM_END("evaspixmapsink - ecore evas post render cb : TOTAL", FALSE);
-			return;
-		}
-		if ((xpixmap->ref == 2) && xpixmap->damaged_time) {
-			if (temp_time == 0) {
-				temp_time = xpixmap->damaged_time;
-				idx = i;
-			} else {
-				if (temp_time > xpixmap->damaged_time) {
-					temp_time = xpixmap->damaged_time;
-					idx = i;
-				}
-			}
-		}
-	}
-
-	xpixmap = evaspixmapsink->xpixmap[idx];
-	if ((xpixmap->ref == 2) && xpixmap->damaged_time) {
-		GST_INFO_OBJECT (evaspixmapsink,"pixmap ref-count DECREASED : pixmap(%d), refcount(%d), damaged_time(%d), idx(%d)",
-									xpixmap->pixmap, xpixmap->ref, xpixmap->damaged_time, idx);
-		xpixmap->ref = 0;
-		xpixmap->damaged_time = 0;
-	} else {
-		GST_LOG_OBJECT (evaspixmapsink, "There's nothing to update");
-	}
-
-	g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
-
-	MMTA_ACUM_ITEM_END("evaspixmapsink - ecore evas post render cb : TOTAL", FALSE);
-
-	GST_DEBUG_OBJECT (evaspixmapsink, "[END]");
-	return;
-}
-
-
 static void
 ecore_pipe_callback_handler (void *data, void *buffer, unsigned int nbyte)
 {
@@ -411,52 +346,62 @@ ecore_pipe_callback_handler (void *data, void *buffer, unsigned int nbyte)
 		/* find a oldest damaged pixmap */
 		int temp_time = 0;
 		for (i = 0; i < evaspixmapsink->num_of_pixmaps; i++) {
-			xpixmap = evaspixmapsink->xpixmap[i];
-			if (xpixmap->ref == 1 && xpixmap->damaged_time) {
-				if (temp_time == 0) {
-					temp_time = xpixmap->damaged_time;
-					idx = i;
-				} else {
-					if (temp_time > xpixmap->damaged_time) {
+			if (evaspixmapsink->last_updated_idx == i) {
+				continue;
+			} else {
+				xpixmap = evaspixmapsink->xpixmap[i];
+				if (xpixmap->ref > 0 && xpixmap->damaged_time) {
+					if (temp_time == 0) {
 						temp_time = xpixmap->damaged_time;
 						idx = i;
+					} else {
+						if (temp_time > xpixmap->damaged_time) {
+							temp_time = xpixmap->damaged_time;
+							idx = i;
+						}
 					}
 				}
 			}
 		}
 
 		xpixmap = evaspixmapsink->xpixmap[idx];
-		if (xpixmap->damaged_time == 0 || xpixmap->ref > 1) {
-			GST_WARNING_OBJECT (evaspixmapsink,"skip update.. idx[%d] : damaged_time[%d], ref[%d]",idx, xpixmap->damaged_time, xpixmap->ref);
-		} else {
-			if (xpixmap->pixmap) {
-				if (evaspixmapsink->last_updated_idx != idx) {
-					Evas_Native_Surface surf;
-					surf.version = EVAS_NATIVE_SURFACE_VERSION;
-					surf.type = EVAS_NATIVE_SURFACE_X11;
-					surf.data.x11.visual = ecore_x_default_visual_get(ecore_x_display_get(), ecore_x_default_screen_get());
-					surf.data.x11.pixmap = xpixmap->pixmap;
-					if (evaspixmapsink->eo) {
-						evas_object_image_native_surface_set(evaspixmapsink->eo, NULL);
-					}
-					__ta__("evaspixmapsink - ecore thread cb : _native_surface_set", evas_object_image_native_surface_set(evaspixmapsink->eo, &surf); );
-					GST_LOG_OBJECT (evaspixmapsink,"update, native_surface_set of xpixmap[%d]",idx);
-					evaspixmapsink->last_updated_idx = idx;
+		if (xpixmap->pixmap) {
+			if (evaspixmapsink->last_updated_idx != idx) {
+				Evas_Native_Surface surf;
+				surf.version = EVAS_NATIVE_SURFACE_VERSION;
+				surf.type = EVAS_NATIVE_SURFACE_X11;
+				surf.data.x11.visual = ecore_x_default_visual_get(ecore_x_display_get(), ecore_x_default_screen_get());
+				surf.data.x11.pixmap = xpixmap->pixmap;
+				if (evaspixmapsink->eo) {
+					evas_object_image_native_surface_set(evaspixmapsink->eo, NULL);
 				}
-				xpixmap->ref++;
-
-				MMTA_ACUM_ITEM_BEGIN("evaspixmapsink evas_object_image update", FALSE);
-				evas_object_image_pixels_dirty_set (evaspixmapsink->eo, 1);
-				evas_object_image_fill_set(evaspixmapsink->eo, 0, 0, evaspixmapsink->w, evaspixmapsink->h);
-				evas_object_image_data_update_add(evaspixmapsink->eo, 0, 0, evaspixmapsink->w, evaspixmapsink->h);
-				MMTA_ACUM_ITEM_END("evaspixmapsink evas_object_image update", FALSE);
-
-				GST_LOG_OBJECT (evaspixmapsink,"request to update : pixmap idx(%d), ref(%d)", idx, xpixmap->ref);
-			} else {
-				GST_ERROR_OBJECT (evaspixmapsink,"pixmap is NULL..");
-				g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
-				return;
+				__ta__("evaspixmapsink - ecore thread cb : _native_surface_set", evas_object_image_native_surface_set(evaspixmapsink->eo, &surf); );
+				GST_LOG_OBJECT (evaspixmapsink,"update, native_surface_set of xpixmap[%d]",idx);
+				if (evaspixmapsink->last_updated_idx == -1) {
+					xpixmap->damaged_time = 0;
+					GST_INFO_OBJECT (evaspixmapsink,"this is the first time to request to update : pixmap(%d), refcount(%d), damaged_time(%d), idx(%d)",
+															xpixmap->pixmap, xpixmap->ref, xpixmap->damaged_time, idx);
+				} else {
+					xpixmap = evaspixmapsink->xpixmap[evaspixmapsink->last_updated_idx];
+					xpixmap->ref--;
+					xpixmap->damaged_time = 0;
+					GST_INFO_OBJECT (evaspixmapsink,"pixmap ref-count DECREASED : pixmap(%d), refcount(%d), damaged_time(%d), idx(%d)",
+											xpixmap->pixmap, xpixmap->ref, xpixmap->damaged_time, evaspixmapsink->last_updated_idx);
+				}
+				evaspixmapsink->last_updated_idx = idx;
 			}
+
+			MMTA_ACUM_ITEM_BEGIN("evaspixmapsink evas_object_image update", FALSE);
+			evas_object_image_pixels_dirty_set (evaspixmapsink->eo, 1);
+			evas_object_image_fill_set(evaspixmapsink->eo, 0, 0, evaspixmapsink->w, evaspixmapsink->h);
+			evas_object_image_data_update_add(evaspixmapsink->eo, 0, 0, evaspixmapsink->w, evaspixmapsink->h);
+			MMTA_ACUM_ITEM_END("evaspixmapsink evas_object_image update", FALSE);
+
+			//GST_LOG_OBJECT (evaspixmapsink,"request to update : pixmap idx(%d), ref(%d)", idx, xpixmap->ref);
+		} else {
+			GST_ERROR_OBJECT (evaspixmapsink,"pixmap is NULL..");
+			g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
+			return;
 		}
 	}
 	g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
@@ -679,12 +624,11 @@ gst_evaspixmap_buffer_destroy (GstEvasPixmapBuffer *evaspixmapbuf)
 {
 	GstEvasPixmapSink *evaspixmapsink;
 
-	GST_DEBUG_OBJECT (evaspixmapsink,"Destroying buffer");
-
 	evaspixmapsink = evaspixmapbuf->evaspixmapsink;
 	if (G_UNLIKELY (evaspixmapsink == NULL)) {
 		goto no_sink;
 	}
+	GST_DEBUG_OBJECT (evaspixmapsink, "Destroying buffer");
 
 	g_return_if_fail (GST_IS_EVASPIXMAPSINK (evaspixmapsink));
 
@@ -740,7 +684,7 @@ beach:
 
 	no_sink:
 	{
-		GST_WARNING_OBJECT (evaspixmapsink,"no sink found");
+		GST_WARNING ("no sink found");
 		return;
 	}
 }
@@ -1047,6 +991,7 @@ gst_evaspixmap_buffer_put (GstEvasPixmapSink *evaspixmapsink, GstEvasPixmapBuffe
 	int rotate = 0;
 	int ret = 0;
 	int idx = 0;
+	GstXPixmap *xpixmap = NULL;
 
 	MMTA_ACUM_ITEM_BEGIN("evaspixmapsink evaspixmap_buffer_put()", FALSE);
 
@@ -1070,45 +1015,28 @@ gst_evaspixmap_buffer_put (GstEvasPixmapSink *evaspixmapsink, GstEvasPixmapBuffe
 		return TRUE;
 	}
 
-	/* check whether if a pixmap buffer is available, or wait here */
-	gboolean wait = TRUE;
-	int timeout_count = 3 * 1; /* 3 frames */
-	GstXPixmap *xpixmap = NULL;
-	do {
-		for (idx = 0; idx < evaspixmapsink->num_of_pixmaps; idx++) {
-			g_mutex_lock (evaspixmapsink->pixmap_ref_lock);
-			if (idx <= evaspixmapsink->last_damaged_pixmap_idx) {
-				if (evaspixmapsink->last_damaged_pixmap_idx == evaspixmapsink->num_of_pixmaps - 1) {
-					/* do nothing */
-				} else {
-					g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
-					continue;
-				}
-			}
+	for (idx = 0; idx < evaspixmapsink->num_of_pixmaps; idx++) {
+		g_mutex_lock (evaspixmapsink->pixmap_ref_lock);
+		if (idx == evaspixmapsink->last_updated_idx) {
+			g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
+			continue;
+		} else {
 			xpixmap = evaspixmapsink->xpixmap[idx];
 			if (xpixmap->ref == 0 && xpixmap->damaged_time == 0) {
 				xpixmap->ref++;
-				wait = FALSE;
-				GST_INFO_OBJECT (evaspixmapsink, "found an available pixmap(%d) : xpixmap[%d]", xpixmap->pixmap, idx);
+				GST_LOG_OBJECT (evaspixmapsink, "found an available pixmap(%d) : xpixmap[%d]", xpixmap->pixmap, idx);
 				GST_INFO_OBJECT (evaspixmapsink,"pixmap ref-count INCREASED : pixmap(%d), refcount(%d)", xpixmap->pixmap, xpixmap->ref);
 				g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
 				break;
 			}
 			g_mutex_unlock (evaspixmapsink->pixmap_ref_lock);
 		}
-		if (wait) {
-			GST_WARNING_OBJECT (evaspixmapsink, "wait until a pixmap is available");
-			/* wait */
-			g_usleep (G_USEC_PER_SEC / 30);
-			timeout_count--;
-			//timeout_count = 0;
-			if (timeout_count == 0) {
-				GST_WARNING_OBJECT (evaspixmapsink, "TIME OUT..");
-				g_mutex_unlock(evaspixmapsink->flow_lock);
-				return FALSE;
-			}
-		}
-	} while (wait);
+	}
+	if (idx == evaspixmapsink->num_of_pixmaps) {
+		GST_LOG_OBJECT (evaspixmapsink, "Could not find a pixmap with idle state, skip buffer_put." );
+		g_mutex_unlock(evaspixmapsink->flow_lock);
+		return TRUE;
+	}
 
 	gst_evaspixmapsink_xpixmap_update_geometry(evaspixmapsink, idx);
 
@@ -1579,7 +1507,7 @@ gst_evaspixmapsink_xpixmap_destroy (GstEvasPixmapSink *evaspixmapsink, GstXPixma
 	if(xpixmap->pixmap) {
 		GST_LOG_OBJECT (evaspixmapsink,"Free pixmap(%d)", xpixmap->pixmap);
 		XFreePixmap(evaspixmapsink->xcontext->disp, xpixmap->pixmap);
-		xpixmap->pixmap = NULL;
+		xpixmap->pixmap = 0;
 	}
 
 	if (xpixmap->gc) {
@@ -2092,7 +2020,6 @@ gst_evaspixmapsink_event_thread (GstEvasPixmapSink * evaspixmapsink)
 						}
 						GST_LOG_OBJECT (evaspixmapsink,"event_handler : got a damage event for pixmap(%d), refcount(%d), damaged_time(%d)",
 												xpixmap->pixmap, xpixmap->ref, xpixmap->damaged_time);
-						evaspixmapsink->last_damaged_pixmap_idx = i;
 						g_mutex_unlock(evaspixmapsink->pixmap_ref_lock);
 
 						__ta__("evaspixmapsink ecore_pipe_write", ecore_pipe_write(evaspixmapsink->epipe, evaspixmapsink, sizeof(GstEvasPixmapSink)););
@@ -2123,8 +2050,6 @@ gst_evaspixmapsink_event_thread (GstEvasPixmapSink * evaspixmapsink)
 static void
 gst_evaspixmapsink_manage_event_thread (GstEvasPixmapSink *evaspixmapsink)
 {
-	GThread *thread = NULL;
-
 	/* don't start the thread too early */
 	if (evaspixmapsink->xcontext == NULL) {
 		GST_ERROR_OBJECT (evaspixmapsink,"xcontext is NULL..");
@@ -2911,12 +2836,6 @@ gst_evaspixmapsink_show_frame (GstVideoSink *vsink, GstBuffer *buf)
 		GST_WARNING_OBJECT (evaspixmapsink,"could not create image");
 		return GST_FLOW_ERROR;
 	}
-	no_pixmap:
-	{
-		/* No Pixmap available to put our image into */
-		GST_WARNING_OBJECT (evaspixmapsink,"could not output image - no pixmap");
-		return GST_FLOW_ERROR;
-	}
 }
 
 static gboolean
@@ -2965,7 +2884,7 @@ gst_evaspixmapsink_navigation_send_event (GstNavigation *navigation, GstStructur
 
   if ((peer = gst_pad_get_peer (GST_VIDEO_SINK_PAD (evaspixmapsink)))) {
     GstEvent *event;
-    GstVideoRectangle src, dst, result;
+    GstVideoRectangle result;
     gdouble x, y, xscale = 1.0, yscale = 1.0;
 
     event = gst_event_new_navigation (structure);
@@ -3254,8 +3173,8 @@ gst_evaspixmapsink_xpixmap_link (GstEvasPixmapSink *evaspixmapsink)
 	int evas_object_height = 0;
 	int pixmap_width = 0;
 	int pixmap_height = 0;
-	int xw = 0;
-	int xh = 0;
+	unsigned int xw = 0;
+	unsigned int xh = 0;
 	int i = 0;
 
 	GST_DEBUG_OBJECT (evaspixmapsink,"[START]");
@@ -3357,7 +3276,7 @@ gst_evaspixmapsink_xpixmap_link (GstEvasPixmapSink *evaspixmapsink)
 
 			GST_LOG_OBJECT (evaspixmapsink,"Free pixmap(%d)", evaspixmapsink->xpixmap[i]->pixmap);
 			XFreePixmap(dpy, evaspixmapsink->xpixmap[i]->pixmap);
-			evaspixmapsink->xpixmap[i]->pixmap = NULL;
+			evaspixmapsink->xpixmap[i]->pixmap = 0;
 			evaspixmapsink->xpixmap[i]->ref = 0;
 			evaspixmapsink->xpixmap[i]->damaged_time = 0;
 
@@ -3385,7 +3304,6 @@ gst_evaspixmapsink_xpixmap_link (GstEvasPixmapSink *evaspixmapsink)
 		GST_WARNING_OBJECT (evaspixmapsink,"xpixmap[%d]->(pixmap:%d,gc:%p), damage[%d]:%d",
 					i, evaspixmapsink->xpixmap[i]->pixmap, evaspixmapsink->xpixmap[i]->gc, i, evaspixmapsink->damage[i]);
 	}
-	evaspixmapsink->last_damaged_pixmap_idx = -1;
 
 	XSync(dpy, FALSE);
 
@@ -3471,13 +3389,13 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 	case PROP_PIXMAP_WIDTH:
 	{
 		/* To do : code related to pixmap re-link */
-		GST_WARNING_OBJECT (evaspixmapsink, "Not supported");
+		GST_LOG_OBJECT (evaspixmapsink, "Not supported");
 		break;
 	}
 	case PROP_PIXMAP_HEIGHT:
 	{
 		/* To do : code related to pixmap re-link */
-		GST_WARNING_OBJECT (evaspixmapsink, "Not supported");
+		GST_LOG_OBJECT (evaspixmapsink, "Not supported");
 		break;
 	}
 	case PROP_DISPLAY_GEOMETRY_METHOD:
@@ -3538,8 +3456,6 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 	case PROP_EVAS_OBJECT:
 	{
 		Evas_Object *eo = g_value_get_pointer (value);
-		Ecore_Evas *ee = NULL;
-		Evas *e = NULL;
 		if ( is_evas_image_object (eo)) {
 			if (!evaspixmapsink->epipe) {
 				evaspixmapsink->epipe = ecore_pipe_add (ecore_pipe_callback_handler, evaspixmapsink);
@@ -3562,20 +3478,6 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 				/* add evas object callbacks on a new evas image object */
 				evas_object_event_callback_add (evaspixmapsink->eo, EVAS_CALLBACK_DEL, evas_callback_del_event, evaspixmapsink);
 				evas_object_event_callback_add (evaspixmapsink->eo, EVAS_CALLBACK_RESIZE, evas_callback_resize_event, evaspixmapsink);
-				e = evas_object_evas_get(eo);
-				if (!e) {
-					GST_ERROR_OBJECT (evaspixmapsink,"could not get evas(0x%x) from evas image object(0x%x)",e, eo);
-				} else {
-					ee = ecore_evas_ecore_evas_get(e);
-					if (!ee) {
-						GST_ERROR_OBJECT (evaspixmapsink,"could not get ecore_evas(0x%x)",ee);
-					} else {
-						evaspixmapsink->ee = ee;
-						ecore_evas_data_set 	(evaspixmapsink->ee, "evaspixmapsink_handle", evaspixmapsink);
-						ecore_evas_callback_post_render_set(ee, ecore_evas_post_render_callback_handler);
-						GST_INFO_OBJECT (evaspixmapsink,"ecore_evas_callback_post_render_set() success, Ecore_Evas(0x%x), Evas_Object(0x%x)", ee, eo);
-					}
-				}
 				GST_INFO_OBJECT (evaspixmapsink,"Evas Image Object(%x) is set", evaspixmapsink->eo);
 			}
 		} else {
@@ -3693,12 +3595,12 @@ gst_evaspixmapsink_get_property (GObject *object, guint prop_id, GValue *value, 
 		break;
 	case PROP_PIXMAP_WIDTH:
 	{
-		GST_WARNING_OBJECT (evaspixmapsink, "Not supported");
+		GST_LOG_OBJECT (evaspixmapsink, "Not supported");
 		break;
 	}
 	case PROP_PIXMAP_HEIGHT:
 	{
-		GST_WARNING_OBJECT (evaspixmapsink, "Not supported");
+		GST_LOG_OBJECT (evaspixmapsink, "Not supported");
 		break;
 	}
 	case PROP_DISPLAY_GEOMETRY_METHOD:
@@ -3827,9 +3729,6 @@ gst_evaspixmapsink_finalize (GObject *object)
 		ecore_pipe_del (evaspixmapsink->epipe);
 		evaspixmapsink->epipe = NULL;
 	}
-	if (evaspixmapsink->ee) {
-		ecore_evas_callback_post_render_set(evaspixmapsink->ee, NULL);
-	}
 
 	GST_DEBUG_OBJECT (evaspixmapsink,"[END]");
 
@@ -3890,7 +3789,6 @@ gst_evaspixmapsink_init (GstEvasPixmapSink *evaspixmapsink)
 	evaspixmapsink->aligned_height = 0;
 	evaspixmapsink->stop_video = FALSE;
 	evaspixmapsink->eo = NULL;
-	evaspixmapsink->ee = NULL;
 	evaspixmapsink->epipe = NULL;
 	evaspixmapsink->do_link = FALSE;
 	evaspixmapsink->flip = DEF_DISPLAY_FLIP;
@@ -3900,7 +3798,6 @@ gst_evaspixmapsink_init (GstEvasPixmapSink *evaspixmapsink)
 	evaspixmapsink->previous_origin_size = FALSE;
 
 	evaspixmapsink->num_of_pixmaps = NUM_OF_PIXMAP;
-	evaspixmapsink->last_damaged_pixmap_idx = -1;
 
 	MMTA_INIT();
  }

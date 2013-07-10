@@ -50,7 +50,6 @@
 #include <Evas.h>
 #include <Ecore.h>
 #include <Ecore_X.h>
-#include <Ecore_Evas.h>
 
 #include <string.h>
 #include <math.h>
@@ -304,7 +303,6 @@ struct _GstEvasPixmapSink {
 	gboolean stop_video;
 
 	/* ecore & evas object */
-	Ecore_Evas *ee;
 	Evas_Object *eo;
 	Evas_Coord w;
 	Evas_Coord h;
@@ -318,7 +316,6 @@ struct _GstEvasPixmapSink {
 	gint sizediff_width;
 	gint sizediff_height;
 	guint num_of_pixmaps;
-	gint last_damaged_pixmap_idx;
 
 	/* damage event */
 	Damage damage[NUM_OF_PIXMAP];
