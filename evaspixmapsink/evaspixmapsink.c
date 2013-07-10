@@ -1664,6 +1664,8 @@ gst_evaspixmapsink_xpixmap_clear (GstEvasPixmapSink *evaspixmapsink, GstXPixmap 
 
 	if (!evaspixmapsink->xcontext) {
 		GST_WARNING_OBJECT (evaspixmapsink,"xcontext is null..");
+		g_mutex_unlock (evaspixmapsink->x_lock);
+		return;
 	}
 
 	if (evaspixmapsink->stop_video) {
@@ -2959,6 +2961,7 @@ gst_evaspixmapsink_navigation_send_event (GstNavigation *navigation, GstStructur
 {
   GstEvasPixmapSink *evaspixmapsink = GST_EVASPIXMAPSINK (navigation);
   GstPad *peer;
+  int i = 0;
 
   if ((peer = gst_pad_get_peer (GST_VIDEO_SINK_PAD (evaspixmapsink)))) {
     GstEvent *event;
@@ -2970,9 +2973,11 @@ gst_evaspixmapsink_navigation_send_event (GstNavigation *navigation, GstStructur
     /* We take the flow_lock while we look at the window */
     g_mutex_lock (evaspixmapsink->flow_lock);
 
-    if (!evaspixmapsink->xpixmap) {
-      g_mutex_unlock (evaspixmapsink->flow_lock);
-      return;
+    for (i = 0; i < evaspixmapsink->num_of_pixmaps; i ++) {
+      if (!evaspixmapsink->xpixmap[i]) {
+        g_mutex_unlock (evaspixmapsink->flow_lock);
+        return;
+      }
     }
 
     memcpy (&result, &evaspixmapsink->render_rect, sizeof (GstVideoRectangle));
@@ -3465,20 +3470,14 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 		break;
 	case PROP_PIXMAP_WIDTH:
 	{
-		//int i = 0;
-		if (evaspixmapsink->xpixmap) {
-			/* To do : code related to pixmap re-link */
-			//evaspixmapsink->xpixmap[i]->width = g_value_get_uint64 (value);
-		}
+		/* To do : code related to pixmap re-link */
+		GST_WARNING_OBJECT (evaspixmapsink, "Not supported");
 		break;
 	}
 	case PROP_PIXMAP_HEIGHT:
 	{
-		//int i = 0;
-		if (evaspixmapsink->xpixmap) {
-			/* To do : code related to pixmap re-link */
-			//evaspixmapsink->xpixmap[i]->height = g_value_get_uint64 (value);
-		}
+		/* To do : code related to pixmap re-link */
+		GST_WARNING_OBJECT (evaspixmapsink, "Not supported");
 		break;
 	}
 	case PROP_DISPLAY_GEOMETRY_METHOD:
@@ -3489,7 +3488,7 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 			GST_INFO_OBJECT (evaspixmapsink,"Overlay geometry method update, display_geometry_method(%d)",evaspixmapsink->display_geometry_method);
 			if( evaspixmapsink->display_geometry_method != DISP_GEO_METHOD_FULL_SCREEN &&
 				  evaspixmapsink->display_geometry_method != DISP_GEO_METHOD_CROPPED_FULL_SCREEN ) {
-				if( evaspixmapsink->xcontext && evaspixmapsink->xpixmap ) {
+				if( evaspixmapsink->xcontext ) {
 					g_mutex_lock( evaspixmapsink->flow_lock );
 					int i = 0;
 					for (i = 0; i < evaspixmapsink->num_of_pixmaps; i++) {
@@ -3693,19 +3692,15 @@ gst_evaspixmapsink_get_property (GObject *object, guint prop_id, GValue *value, 
 		g_value_set_int (value, evaspixmapsink->colorkey);
 		break;
 	case PROP_PIXMAP_WIDTH:
-		if (evaspixmapsink->xpixmap) {
-		//	g_value_set_uint64 (value, evaspixmapsink->xpixmap->width);
-		} else {
-			g_value_set_uint64 (value, 0);
-		}
+	{
+		GST_WARNING_OBJECT (evaspixmapsink, "Not supported");
 		break;
+	}
 	case PROP_PIXMAP_HEIGHT:
-		if (evaspixmapsink->xpixmap) {
-		//	g_value_set_uint64 (value, evaspixmapsink->xpixmap->height);
-		} else {
-			g_value_set_uint64 (value, 0);
-		}
+	{
+		GST_WARNING_OBJECT (evaspixmapsink, "Not supported");
 		break;
+	}
 	case PROP_DISPLAY_GEOMETRY_METHOD:
 		g_value_set_enum (value, evaspixmapsink->display_geometry_method);
 		break;
