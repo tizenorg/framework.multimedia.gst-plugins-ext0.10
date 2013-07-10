@@ -204,6 +204,7 @@ PKG_CHECK_MODULES(EFL, [
   evas >= $EFL_REQUIRED
   ecore >= $EFL_REQUIRED
   ecore-x >= $EFL_REQUIRED
+  ecore-evas >= $EFL_REQUIRED
 ], [
   AC_SUBST(EFL_CFLAGS)
   AC_SUBST(EFL_LIBS)

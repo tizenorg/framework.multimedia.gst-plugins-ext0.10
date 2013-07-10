@@ -50,6 +50,7 @@
 #include <Evas.h>
 #include <Ecore.h>
 #include <Ecore_X.h>
+#include <Ecore_Evas.h>
 
 #include <string.h>
 #include <math.h>
@@ -78,10 +79,11 @@ G_BEGIN_DECLS
 #define GST_IS_EVASPIXMAPSINK_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_EVASPIXMAPSINK))
 
-#define XV_SCREEN_SIZE_WIDTH 4096
+#define XV_SCREEN_SIZE_WIDTH  4096
 #define XV_SCREEN_SIZE_HEIGHT 4096
 
-#define MARGIN_OF_ERROR 0.005
+#define MARGIN_OF_ERROR       0.005
+#define NUM_OF_PIXMAP         3
 
 typedef struct _GstXContext GstXContext;
 typedef struct _GstXPixmap GstXPixmap;
@@ -167,6 +169,8 @@ struct _GstXPixmap {
 	gint x, y;
 	gint width, height;
 	GC gc;
+	guint ref;
+	gint damaged_time;
 };
 
 /**
@@ -242,7 +246,7 @@ struct _GstEvasPixmapSink {
 	guint adaptor_no;
 
 	GstXContext *xcontext;
-	GstXPixmap *xpixmap;
+	GstXPixmap *xpixmap[NUM_OF_PIXMAP];
 	GstEvasPixmapBuffer *evas_pixmap_buf;
 
 	GThread *event_thread;
@@ -253,6 +257,7 @@ struct _GstEvasPixmapSink {
 
 	GMutex *x_lock;
 	GMutex *flow_lock;
+	GMutex *pixmap_ref_lock;
 
 	/* object-set pixel aspect ratio */
 	GValue *par;
@@ -298,21 +303,26 @@ struct _GstEvasPixmapSink {
 
 	gboolean stop_video;
 
-	/* evas object */
+	/* ecore & evas object */
+	Ecore_Evas *ee;
 	Evas_Object *eo;
 	Evas_Coord w;
 	Evas_Coord h;
 	gboolean visible;
+	gint last_updated_idx;
 
 	/* pixmap */
 	gboolean do_link;
 	gboolean use_origin_size;
 	gboolean previous_origin_size;
+	gint sizediff_width;
+	gint sizediff_height;
+	guint num_of_pixmaps;
+	gint last_damaged_pixmap_idx;
 
 	/* damage event */
-	Damage damage;
+	Damage damage[NUM_OF_PIXMAP];
 	int damage_case;
-	Ecore_Event_Handler *handler;
 	Ecore_Pipe *epipe;
 
 	gint drm_fd;

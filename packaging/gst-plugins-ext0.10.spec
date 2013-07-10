@@ -1,5 +1,5 @@
 Name:       gst-plugins-ext0.10
-Version:    0.3.3
+Version:    0.3.4
 Summary:    GStreamer extra plugins (common)
 Release:    0
 Group:      libs
@@ -9,6 +9,7 @@ BuildRequires:  pkgconfig(avsysaudio)
 BuildRequires:  pkgconfig(camsrcjpegenc)
 BuildRequires:  pkgconfig(ecore)
 BuildRequires:  pkgconfig(ecore-x)
+BuildRequires:  pkgconfig(ecore-evas)
 BuildRequires:  pkgconfig(evas)
 BuildRequires:  pkgconfig(mm-ta)
 BuildRequires:  pkgconfig(gstreamer-plugins-base-0.10)
@@ -33,7 +34,7 @@ GStreamer extra plugins (common)
 
 
 %build
-export CFLAGS+=" -DGST_EXT_TIME_ANALYSIS -DGST_EXT_XV_ENHANCEMENT -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" "
+export CFLAGS+=" -DGST_EXT_TIME_ANALYSIS -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" "
 
 ./autogen.sh --disable-static
 %configure --disable-static
