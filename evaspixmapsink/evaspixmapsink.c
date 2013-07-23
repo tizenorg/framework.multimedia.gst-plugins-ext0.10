@@ -3495,23 +3495,24 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 	{
 		gboolean visible = g_value_get_boolean (value);
 		if (evaspixmapsink->visible != visible) {
+			evaspixmapsink->visible = visible;
 			if (evaspixmapsink->eo) {
-				g_mutex_lock( evaspixmapsink->flow_lock );
 				if (!visible) {
 					int i = 0;
+					g_mutex_lock( evaspixmapsink->flow_lock );
 					for (i = 0; i < evaspixmapsink->num_of_pixmaps; i++) {
 						if (evaspixmapsink->xpixmap[i]) {
 							gst_evaspixmapsink_xpixmap_clear (evaspixmapsink, evaspixmapsink->xpixmap[i]);
 						}
 					}
+					g_mutex_unlock( evaspixmapsink->flow_lock );
 					evas_object_hide(evaspixmapsink->eo);
 					GST_INFO_OBJECT (evaspixmapsink,"object hide..");
 				} else {
 					evas_object_show(evaspixmapsink->eo);
 					GST_INFO_OBJECT (evaspixmapsink,"object show..");
+					gst_evaspixmap_buffer_put (evaspixmapsink, evaspixmapsink->evas_pixmap_buf);
 				}
-				evaspixmapsink->visible = visible;
-				g_mutex_unlock( evaspixmapsink->flow_lock );
 			} else {
 				GST_WARNING_OBJECT (evaspixmapsink,"evas image object was not set");
 			}
