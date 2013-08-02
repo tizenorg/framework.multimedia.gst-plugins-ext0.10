@@ -3468,13 +3468,13 @@ gst_evaspixmapsink_set_property (GObject *object, guint prop_id, const GValue *v
 				/* delete evas object callbacks registrated on a former evas image object */
 				evas_object_event_callback_del (evaspixmapsink->eo, EVAS_CALLBACK_DEL, evas_callback_del_event);
 				evas_object_event_callback_del (evaspixmapsink->eo, EVAS_CALLBACK_RESIZE, evas_callback_resize_event);
+				evaspixmapsink->eo = eo;
 				if (evaspixmapsink->eo) {
 					if (!gst_evaspixmapsink_xpixmap_link(evaspixmapsink)) {
 						GST_WARNING_OBJECT (evaspixmapsink,"link evas image object with pixmap failed...");
 						return;
 					}
 				}
-				evaspixmapsink->eo = eo;
 				/* add evas object callbacks on a new evas image object */
 				evas_object_event_callback_add (evaspixmapsink->eo, EVAS_CALLBACK_DEL, evas_callback_del_event, evaspixmapsink);
 				evas_object_event_callback_add (evaspixmapsink->eo, EVAS_CALLBACK_RESIZE, evas_callback_resize_event, evaspixmapsink);
