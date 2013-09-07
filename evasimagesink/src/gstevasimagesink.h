@@ -56,6 +56,7 @@ struct _GstEvasImageSink
 	Evas_Coord w;
 	Evas_Coord h;
 	gboolean object_show;
+	gchar update_visibility;
 	gboolean gl_zerocopy;
 
 	GstBuffer *oldbuf;
