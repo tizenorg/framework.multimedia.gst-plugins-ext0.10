@@ -1,7 +1,7 @@
 Name:       gst-plugins-ext0.10
 Version:    0.3.9
 Summary:    GStreamer extra plugins (common)
-Release:    0
+Release:    1
 Group:      libs
 License:    LGPLv2+
 Source0:    %{name}-%{version}.tar.gz
@@ -42,6 +42,8 @@ make %{?jobs:-j%jobs}
 
 %install
 rm -rf %{buildroot}
+mkdir -p %{buildroot}/usr/share/license
+cp LICENSE.LGPLv2.1 %{buildroot}/usr/share/license/%{name}
 %make_install
 
 
@@ -49,3 +51,4 @@ rm -rf %{buildroot}
 %manifest gst-plugins-ext0.10.manifest
 %defattr(-,root,root,-)  
 %{_libdir}/gstreamer-0.10/*.so
+%{_datadir}/license/%{name}
