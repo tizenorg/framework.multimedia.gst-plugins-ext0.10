@@ -553,9 +553,11 @@ gst_evas_image_sink_set_property (GObject *object, guint prop_id, const GValue *
 				esink->is_evas_object_size_set = FALSE;
 				esink->object_show = TRUE;
 				esink->update_visibility = UPDATE_TRUE;
-				r = ecore_pipe_write (esink->epipe, &esink->update_visibility, SIZE_FOR_UPDATE_VISIBILITY);
-				if (r == EINA_FALSE)  {
-					GST_WARNING ("Failed to ecore_pipe_write() for updating visibility\n");
+				if (esink->epipe) {
+					r = ecore_pipe_write (esink->epipe, &esink->update_visibility, SIZE_FOR_UPDATE_VISIBILITY);
+					if (r == EINA_FALSE)  {
+						GST_WARNING ("Failed to ecore_pipe_write() for updating visibility\n");
+					}
 				}
 			}
 		} else {
@@ -572,9 +574,11 @@ gst_evas_image_sink_set_property (GObject *object, guint prop_id, const GValue *
 			break;
 		}
 		esink->update_visibility = UPDATE_TRUE;
-		r = ecore_pipe_write (esink->epipe, &esink->update_visibility, SIZE_FOR_UPDATE_VISIBILITY);
-		if (r == EINA_FALSE)  {
-			GST_WARNING ("Failed to ecore_pipe_write() for updating visibility)\n");
+		if (esink->epipe) {
+			r = ecore_pipe_write (esink->epipe, &esink->update_visibility, SIZE_FOR_UPDATE_VISIBILITY);
+			if (r == EINA_FALSE)  {
+				GST_WARNING ("Failed to ecore_pipe_write() for updating visibility)\n");
+			}
 		}
 		break;
 	}
