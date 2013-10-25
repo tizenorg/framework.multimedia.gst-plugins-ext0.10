@@ -1,7 +1,7 @@
 Name:       gst-plugins-ext0.10
-Version:    0.3.9
+Version:    0.3.10
 Summary:    GStreamer extra plugins (common)
-Release:    1
+Release:    0
 Group:      libs
 License:    LGPLv2+
 Source0:    %{name}-%{version}.tar.gz
@@ -24,6 +24,7 @@ BuildRequires:  pkgconfig(libtbm)
 BuildRequires:	libdrm-devel
 BuildRequires:	pkgconfig(dri2proto)
 BuildRequires:	pkgconfig(xfixes)
+BuildRequires:	pkgconfig(libtbm)
 
 %description
 GStreamer extra plugins (common)

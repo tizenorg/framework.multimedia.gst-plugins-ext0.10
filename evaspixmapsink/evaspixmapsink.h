@@ -51,6 +51,8 @@
 #include <Ecore.h>
 #include <Ecore_X.h>
 
+#include <tbm_bufmgr.h>
+
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
@@ -62,8 +64,16 @@ typedef struct _gem_info_t {
 	int dmabuf_fd;
 	unsigned int gem_handle;
 	unsigned int gem_name;
+	tbm_bo bo;
+	Pixmap ref_pixmap;
 } gem_info_t;
 
+typedef enum {
+	BUF_SHARE_METHOD_NONE = -1,
+	BUF_SHARE_METHOD_PADDR = 0,
+	BUF_SHARE_METHOD_FD,
+	BUF_SHARE_METHOD_TIZEN_BUFFER
+} buf_share_method_t;
 
 G_BEGIN_DECLS
 
@@ -170,6 +180,8 @@ struct _GstXPixmap {
 	GC gc;
 	guint ref;
 	gint damaged_time;
+	Pixmap prev_pixmap;
+	GC prev_gc;
 };
 
 /**
@@ -301,13 +313,17 @@ struct _GstEvasPixmapSink {
 	guint aligned_height;
 
 	gboolean stop_video;
+	buf_share_method_t buf_shared_type;
 
 	/* ecore & evas object */
+	Ecore_Pipe *epipe;
 	Evas_Object *eo;
 	Evas_Coord w;
 	Evas_Coord h;
 	gboolean visible;
 	gint last_updated_idx;
+	gchar update_visibility;
+	guint epipe_request_count;
 
 	/* pixmap */
 	gboolean do_link;
@@ -319,8 +335,8 @@ struct _GstEvasPixmapSink {
 
 	/* damage event */
 	Damage damage[NUM_OF_PIXMAP];
+	Damage prev_damage[NUM_OF_PIXMAP];
 	int damage_case;
-	Ecore_Pipe *epipe;
 
 	gint drm_fd;
 	gem_info_t gem_info[MAX_GEM_BUFFER_NUM];
