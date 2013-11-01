@@ -224,10 +224,6 @@ evas_image_sink_cb_pipe (void *data, void *buffer, unsigned int nbyte)
 	if (!buffer || nbyte != sizeof (GstBuffer *)) {
 		return;
 	}
-	if (GST_STATE(esink) < GST_STATE_PAUSED) {
-		GST_WARNING ("WRONG-STATE(%d) for rendering, skip this frame", GST_STATE(esink));
-		return;
-	}
 
 	memcpy (&buf, buffer, sizeof (GstBuffer *));
 	if (!buf) {
@@ -551,12 +547,11 @@ gst_evas_image_sink_set_property (GObject *object, guint prop_id, const GValue *
 				}
 				GST_DEBUG("Evas Image Object(%x) is set",esink->eo);
 				esink->is_evas_object_size_set = FALSE;
-				esink->object_show = TRUE;
-				esink->update_visibility = UPDATE_TRUE;
-				if (esink->epipe) {
-					r = ecore_pipe_write (esink->epipe, &esink->update_visibility, SIZE_FOR_UPDATE_VISIBILITY);
-					if (r == EINA_FALSE)  {
-						GST_WARNING ("Failed to ecore_pipe_write() for updating visibility\n");
+				if (!esink->epipe) {
+					esink->epipe = ecore_pipe_add (evas_image_sink_cb_pipe, esink);
+					if (!esink->epipe) {
+						GST_ERROR ("ecore-pipe create failed");
+						break;
 					}
 				}
 			}
@@ -574,11 +569,16 @@ gst_evas_image_sink_set_property (GObject *object, guint prop_id, const GValue *
 			break;
 		}
 		esink->update_visibility = UPDATE_TRUE;
-		if (esink->epipe) {
-			r = ecore_pipe_write (esink->epipe, &esink->update_visibility, SIZE_FOR_UPDATE_VISIBILITY);
-			if (r == EINA_FALSE)  {
-				GST_WARNING ("Failed to ecore_pipe_write() for updating visibility)\n");
+		if (!esink->epipe) {
+			esink->epipe = ecore_pipe_add (evas_image_sink_cb_pipe, esink);
+			if (!esink->epipe) {
+				GST_ERROR ("ecore-pipe create failed");
+				break;
 			}
+		}
+		r = ecore_pipe_write (esink->epipe, &esink->update_visibility, SIZE_FOR_UPDATE_VISIBILITY);
+		if (r == EINA_FALSE)  {
+			GST_WARNING ("Failed to ecore_pipe_write() for updating visibility)\n");
 		}
 		break;
 	}
@@ -647,16 +647,14 @@ gst_evas_image_sink_show_frame (GstVideoSink *video_sink, GstBuffer *buf)
 			return GST_FLOW_ERROR;
 		}
 	}
-	if (esink->object_show) {
-		gst_buffer_ref (buf);
-		__ta__("evasimagesink ecore_pipe_write", r = ecore_pipe_write (esink->epipe, &buf, sizeof (GstBuffer *)););
-		if (r == EINA_FALSE)  {
-			gst_buffer_unref (buf);
-		}
-		GST_DEBUG ("ecore_pipe_write() was called with GST_BUFFER_DATA(buf):%x", GST_BUFFER_DATA(buf));
-	} else {
-		GST_DEBUG ("skip ecore_pipe_write()");
+
+	gst_buffer_ref (buf);
+	__ta__("evasimagesink ecore_pipe_write", r = ecore_pipe_write (esink->epipe, &buf, sizeof (GstBuffer *)););
+	if (r == EINA_FALSE)  {
+		gst_buffer_unref (buf);
 	}
+	GST_DEBUG ("ecore_pipe_write() was called with GST_BUFFER_DATA(buf):%x", GST_BUFFER_DATA(buf));
+
 	g_mutex_unlock (instance_lock);
 	return GST_FLOW_OK;
 }
