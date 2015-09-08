@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
+#include <drm_trusted_client_types.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -48,30 +49,6 @@
 #define O_BINARY (0)
 #endif
 
-#define ENABLE_PROFILING_INFO
-#ifdef ENABLE_PROFILING_INFO
-#define   PROFILE_FUNC_BEGIN\
-	char *newname; \
-	newname=__FUNCTION__; \	
-	gst_ta_accum_item_begin(newname,FALSE,__FILE__,__LINE__);	
-	
-#define PROFILE_FUNC_END  \	
-	gst_ta_accum_item_end(newname,FALSE,__FILE__,__LINE__);
-
-#define PROFILE_BLOCK_BEGIN(name) 		gst_ta_accum_item_begin(name,FALSE,__FILE__,__LINE__);
-#define PROFILE_BLOCK_END(name)		gst_ta_accum_item_end(name,FALSE,__FILE__,__LINE__);
-#define PROFILE_INIT						gst_ta_init();
-#define PROFILE_SHOW_RESULT			gst_ta_accum_show_result(0);//MMTA_SHOW_FILE);  
-#define PROFILE_CLEAR_DATA				gst_ta_release();
-#else
-#define PROFILE_FUNC_BEGIN
-#define PROFILE_FUNC_END
-#define PROFILE_BLOCK_BEGIN(name)
-#define PROFILE_BLOCK_END(name)
-#define PROFILE_INIT
-#define PROFILE_SHOW_RESULT
-#define PROFILE_CLEAR_DATA 
-#endif
 G_BEGIN_DECLS
 
 #define GST_TYPE_DRM_SRC (gst_drm_src_get_type())
@@ -90,8 +67,17 @@ struct _GstDrmSrc
 	gchar *uri;				 
 	gint fd;				 
 	guint64 read_position;	
-      gboolean seekable;      
+	gboolean seekable;
 	gboolean is_regular;    
+	gboolean is_drm;          // flag indicating drm file
+	DRM_DECRYPT_HANDLE hfile;
+	gboolean is_playready;
+	gboolean is_oma;
+	gboolean event_posted;
+	gboolean isopen;
+#ifdef CONTROL_PAGECACHE
+	guint64 accum;
+#endif
 };
 
 struct _GstDrmSrcClass 

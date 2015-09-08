@@ -24,12 +24,17 @@
 #ifndef __GST_EVASIMAGESINK_H__
 #define __GST_EVASIMAGESINK_H__
 
+//#define USE_TBM_SURFACE
+#define USE_FIMCC
+
 #include <gst/gst.h>
 #include <gst/video/gstvideosink.h>
 #include <Evas.h>
 #include <Ecore.h>
-#include <mm_ta.h>
-
+#ifdef USE_TBM_SURFACE
+#include <tbm_surface.h>
+#include <tbm_bufmgr.h>
+#endif
 G_BEGIN_DECLS
 
 /* #defines don't like whitespacey bits */
@@ -46,7 +51,71 @@ G_BEGIN_DECLS
 
 typedef struct _GstEvasImageSink      GstEvasImageSink;
 typedef struct _GstEvasImageSinkClass GstEvasImageSinkClass;
+#ifdef USE_TBM_SURFACE
+typedef struct _GstEvasImageDisplayingBuffer GstEvasImageDisplayingBuffer;
+typedef struct _GstEvasImageFlushBuffer GstEvasImageFlushBuffer;
+typedef enum {
+	BUF_SHARE_METHOD_NONE = -1,
+	BUF_SHARE_METHOD_PADDR = 0,
+	BUF_SHARE_METHOD_FD,
+	BUF_SHARE_METHOD_TIZEN_BUFFER,
+	BUF_SHARE_METHOD_FLUSH_BUFFER
+} buf_share_method_t;
 
+enum {
+    DEGREE_0 = 0,
+    DEGREE_90,
+    DEGREE_180,
+    DEGREE_270,
+    DEGREE_NUM,
+};
+
+enum {
+    DISP_GEO_METHOD_LETTER_BOX = 0,
+    DISP_GEO_METHOD_ORIGIN_SIZE,
+    DISP_GEO_METHOD_FULL_SCREEN,
+    DISP_GEO_METHOD_CROPPED_FULL_SCREEN,
+    DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX,
+    DISP_GEO_METHOD_CUSTOM_DST_ROI,
+    DISP_GEO_METHOD_NUM,
+};
+
+enum {
+	FLIP_NONE = 0,
+	FLIP_HORIZONTAL,
+	FLIP_VERTICAL,
+	FLIP_BOTH,
+	FLIP_NUM
+};
+
+struct buffer_info {
+	uint64_t usr_addr;
+	uint64_t size;
+	void *bo;
+	tbm_surface_h tbm_surf;
+};
+
+/* _GstEvasDisplayingBuffer
+ *
+ * buffer		: manage ref count by got index through comparison
+ * bo			: compare with buffer from codec for getting index
+ * n_buffer		: compare with buffer from evas for getting index
+ * ref_count	: decide whether it unref buffer or not in gst_evas_image_sink_fini/reset
+ */
+struct _GstEvasImageDisplayingBuffer {
+	GstBuffer *buffer;
+	void *bo;
+	tbm_surface_h tbm_surf;
+	int ref_count;
+};
+
+struct _GstEvasImageFlushBuffer {
+	void *bo;
+	tbm_surface_h tbm_surf;
+};
+#define NATIVE_BUFFER_NUM 20
+#define SOURCE_BUFFER_NUM 8
+#endif
 struct _GstEvasImageSink
 {
 	GstVideoSink element;
@@ -56,12 +125,37 @@ struct _GstEvasImageSink
 	Evas_Coord w;
 	Evas_Coord h;
 	gboolean object_show;
+	gchar update_visibility;
 	gboolean gl_zerocopy;
 
 	GstBuffer *oldbuf;
 
 	gboolean is_evas_object_size_set;
 	guint present_data_addr;
+#ifdef USE_TBM_SURFACE
+	GMutex *display_buffer_lock;
+	GMutex *flow_lock;
+	GstEvasImageDisplayingBuffer displaying_buffer[NATIVE_BUFFER_NUM];
+	GstVideoRectangle eo_size;
+	gboolean use_ratio;
+	guint rotate_angle;
+	guint display_geometry_method;
+	guint flip;
+	GstBuffer *prev_buf;
+	gint prev_index;
+	gint cur_index;
+	gboolean need_flush;
+	gboolean enable_flush_buffer;
+	GstEvasImageFlushBuffer *flush_buffer;
+	gint sent_buffer_cnt;
+	gint debuglog_cnt_showFrame;
+	gint debuglog_cnt_ecoreCbPipe;
+
+	tbm_format tbm_surface_format;
+	struct buffer_info src_buffer_info[NATIVE_BUFFER_NUM];
+	guint src_buf_idx;
+	gboolean is_buffer_allocated;
+#endif
 };
 
 struct _GstEvasImageSinkClass

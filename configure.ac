@@ -1,6 +1,6 @@
 
 AC_INIT(extension, 1.0)
- 
+
 dnl versions of gstreamer and plugins-base
 GST_MAJORMINOR=0.10
 GST_REQUIRED=0.10.0
@@ -39,10 +39,10 @@ AC_PROG_LIBTOOL
 
 dnl decide on error flags
 AS_COMPILER_FLAG(-Wall, GST_WALL="yes", GST_WALL="no")
-                                                                                
+
 if test "x$GST_WALL" = "xyes"; then
    GST_ERROR="$GST_ERROR -Wall"
-                                                                                
+
 #   if test "x$GST_PLUGIN_CVS" = "xyes"; then
 #     AS_COMPILER_FLAG(-Werror,GST_ERROR="$GST_ERROR -Werror",GST_ERROR="$GST_ERROR")
 #   fi
@@ -160,12 +160,47 @@ PKG_CHECK_MODULES(GST_INTERFACES, gstreamer-interfaces-$GST_MAJORMINOR >= $GST_R
 AC_SUBST(GST_INTERFACES_CFLAGS)
 AC_SUBST(GST_INTERFACES_LIBS)
 
-dnl use time analysis module
-PKG_CHECK_MODULES(MMTA, mm-ta)
-AC_SUBST(MMTA_CFLAGS)
-AC_SUBST(MMTA_LIBS)
+dnl xvimagesrc _CFLAGS and _LIB available
 
-dnl required package for evasimagesink
+PKG_CHECK_MODULES(DRI2, libdri2)
+AC_SUBST(DRI2_CFLAGS)
+AC_SUBST(DRI2_LIBS)
+
+PKG_CHECK_MODULES(X11, x11)
+AC_SUBST(X11_CFLAGS)
+AC_SUBST(X11_LIBS)
+
+PKG_CHECK_MODULES(XEXT, xext)
+AC_SUBST(XEXT_CFLAGS)
+AC_SUBST(XEXT_LIBS)
+
+PKG_CHECK_MODULES(XV, xv)
+AC_SUBST(XV_CFLAGS)
+AC_SUBST(XV_LIBS)
+
+PKG_CHECK_MODULES(XDAMAGE, xdamage)
+AC_SUBST(XDAMAGE_CFLAGS)
+AC_SUBST(XDAMAGE_LIBS)
+
+PKG_CHECK_MODULES(DRM, libdrm)
+AC_SUBST(DRM_CFLAGS)
+AC_SUBST(DRM_LIBS)
+
+PKG_CHECK_MODULES(DRM, libdrm-devel)
+AC_SUBST(DRM_DEVEL_CFLAGS)
+AC_SUBST(DRM_DEVEL_LIBS)
+
+PKG_CHECK_MODULES(TBM, libtbm)
+AC_SUBST(TBM_CFLAGS)
+AC_SUBST(TBM_LIBS)
+
+dnl use time analysis module
+
+PKG_CHECK_MODULES(XML2, libxml-2.0)
+AC_SUBST(XML2_CFLAGS)
+AC_SUBST(XML2_LIBS)
+
+dnl required package for evasimagesink/evaspixmapsink
 PKG_CHECK_MODULES(EFL, [
   evas >= $EFL_REQUIRED
   ecore >= $EFL_REQUIRED
@@ -181,6 +216,88 @@ PKG_CHECK_MODULES(EFL, [
       The minimum version required is $EFL_REQUIRED.
   ])
 ])
+
+dnl *** belows are related to evaspixmapsink plug-ins ***
+AG_GST_ARG_WITH_PACKAGE_NAME
+AG_GST_ARG_WITH_PACKAGE_ORIGIN
+
+dnl set license and copyright notice
+GST_LICENSE="LGPL"
+AC_DEFINE_UNQUOTED(GST_LICENSE, "$GST_LICENSE", [GStreamer license])
+AC_SUBST(GST_LICENSE)
+
+echo
+AC_MSG_NOTICE([Checking libraries for evaspixmapsink plugin])
+echo
+dnl *** X11 ***
+translit(dnm, m, l) AM_CONDITIONAL(USE_X, true)
+AG_GST_CHECK_FEATURE(X, [X libraries and plugins],
+                  [evaspixmapsink], [
+  AC_PATH_XTRA
+  ac_cflags_save="$CFLAGS"
+  ac_cppflags_save="$CPPFLAGS"
+  CFLAGS="$CFLAGS $X_CFLAGS"
+  CPPFLAGS="$CPPFLAGS $X_CFLAGS"
+
+  dnl now try to find the HEADER
+  AC_CHECK_HEADER(X11/Xlib.h, HAVE_X="yes", HAVE_X="no")
+
+  if test "x$HAVE_X" = "xno"
+  then
+    AC_MSG_NOTICE([cannot find X11 development files])
+  else
+    dnl this is much more than we want
+    X_LIBS="$X_LIBS $X_PRE_LIBS $X_EXTRA_LIBS"
+    dnl AC_PATH_XTRA only defines the path needed to find the X libs,
+    dnl it does not add the libs; therefore we add them here
+    X_LIBS="$X_LIBS -lX11"
+    AC_SUBST(X_CFLAGS)
+    AC_SUBST(X_LIBS)
+  fi
+  AC_SUBST(HAVE_X)
+  CFLAGS="$ac_cflags_save"
+  CPPFLAGS="$ac_cppflags_save"
+])
+
+dnl Check for Xv extension
+translit(dnm, m, l) AM_CONDITIONAL(USE_XVIDEO, true)
+AG_GST_CHECK_FEATURE(XVIDEO, [X11 XVideo extensions],
+                  [evaspixmapsink], [
+AG_GST_CHECK_XV
+])
+
+dnl check for X Shm
+translit(dnm, m, l) AM_CONDITIONAL(USE_XSHM, true)
+AG_GST_CHECK_FEATURE(XSHM, [X Shared Memory extension], , [
+  if test x$HAVE_X = xyes; then
+    AC_CHECK_LIB(Xext, XShmAttach,
+		 HAVE_XSHM="yes", HAVE_XSHM="no",
+		 $X_LIBS)
+    if test "x$HAVE_XSHM" = "xyes"; then
+      XSHM_LIBS="-lXext"
+    else
+      dnl On AIX, it is in XextSam instead, but we still need -lXext
+      AC_CHECK_LIB(XextSam, XShmAttach,
+		   HAVE_XSHM="yes", HAVE_XSHM="no",
+		   $X_LIBS)
+      if test "x$HAVE_XSHM" = "xyes"; then
+	XSHM_LIBS="-lXext -lXextSam"
+      fi
+    fi
+  fi
+], , [
+  AC_SUBST(HAVE_XSHM)
+  AC_SUBST(XSHM_LIBS)
+])
+
+dnl use tbm
+PKG_CHECK_MODULES(TBM, libtbm)
+AC_SUBST(TBM_CFLAGS)
+AC_SUBST(TBM_LIBS)
+
+PKG_CHECK_MODULES(VCONF, vconf)
+AC_SUBST(VCONF_CFLAGS)
+AC_SUBST(VCONF_LIBS)
 
 dnl PKG_CHECK_MODULES(UDEVMGR, unified-dev-mgr)
 dnl AC_SUBST(UDEVMGR_CFLAGS)
@@ -198,18 +315,6 @@ AC_ARG_ENABLE(ext-encodebin, AC_HELP_STRING([--enable-ext-encodebin], [using enc
   [GST_EXT_USE_EXT_ENCODEBIN=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_ENCODEBIN, test "x$GST_EXT_USE_EXT_ENCODEBIN" = "xyes")
 
-dnl use ext-avsystem --------------------------------------------------------------------------
-AC_ARG_ENABLE(ext-avsystem, AC_HELP_STRING([--enable-ext-avsystem], [using avsystem]),
-  [
-    case "${enableval}" in
-      yes) GST_EXT_USE_EXT_AVSYSTEM=yes ;;
-      no)  GST_EXT_USE_EXT_AVSYSTEM=no ;;
-      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-avsystem) ;;
-    esac
-  ],
-  [GST_EXT_USE_EXT_AVSYSTEM=yes])
-AM_CONDITIONAL(GST_EXT_USE_EXT_AVSYSTEM, test "x$GST_EXT_USE_EXT_AVSYSTEM" = "xyes")
-
 dnl use ext-evasimagesink --------------------------------------------------------------------------
 AC_ARG_ENABLE(ext-evasimagesink, AC_HELP_STRING([--enable-ext-evasimagesink], [using evasimagesink]),
   [
@@ -222,30 +327,40 @@ AC_ARG_ENABLE(ext-evasimagesink, AC_HELP_STRING([--enable-ext-evasimagesink], [u
   [GST_EXT_USE_EXT_EVASIMAGESINK=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_EVASIMAGESINK, test "x$GST_EXT_USE_EXT_EVASIMAGESINK" = "xyes")
 
-dnl use ext-gstreamer-audio -------------------------------------------------------------------
-AC_ARG_ENABLE(ext-gstreamer-audio, AC_HELP_STRING([--enable-ext-gstreamer-audio], [using gstreamer-audio]),
+dnl use evaspixmapsink ---------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-evaspixmapsink, AC_HELP_STRING([--enable-ext-evaspixmapsink], [using evaspixmapsink]),
   [
     case "${enableval}" in
-      yes) GST_EXT_USE_EXT_AVSYSAUDIO=yes ;;
-      no)  GST_EXT_USE_EXT_AVSYSAUDIO=no ;;
-      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-gstreamer-audio) ;;
+      yes) GST_EXT_USE_EXT_EVASPIXMAPSINK=yes ;;
+      no)  GST_EXT_USE_EXT_EVASPIXMAPSINK=no ;;
+      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-evaspixmapsink) ;;
     esac
   ],
-  [GST_EXT_USE_EXT_AVSYSAUDIO=yes])
-AM_CONDITIONAL(GST_EXT_USE_EXT_AVSYSAUDIO, test "x$GST_EXT_USE_EXT_AVSYSAUDIO" = "xyes")
+  [GST_EXT_USE_EXT_EVASPIXMAPSINK=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_EVASPIXMAPSINK, test "x$GST_EXT_USE_EXT_EVASPIXMAPSINK" = "xyes")
 
-if test "x$GST_EXT_USE_EXT_AVSYSAUDIO" = "xyes"; then
-	HAVE_AVSYSAUDIO=NO
-	PKG_CHECK_MODULES(AVSYSAUDIO, avsysaudio, HAVE_AVSYSAUDIO="yes", [
-	    HAVE_AVSYSAUDIO="no"
-	    AC_MSG_RESULT(no)
-	  ])
-	if test "x$HAVE_AVSYSAUDIO" = "xno"; then
-	  AC_MSG_ERROR(no avsysaudio package found)
-	fi
-	AC_SUBST(AVSYSAUDIO_CFLAGS)
-	AC_SUBST(AVSYSAUDIO_LIBS)
-fi	
+dnl use ext-xvimagesrc--------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-xvimagesrc, AC_HELP_STRING([--enable-ext-xvimagesrc], [using xvimagesrc]),
+  [
+    case "${enableval}" in
+      yes) GST_EXT_USE_EXT_XVIMAGESRC=yes ;;
+      no)  GST_EXT_USE_EXT_XVIMAGESRC=no ;;
+      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-xvimagesrc) ;;
+    esac
+  ],
+  [GST_EXT_USE_EXT_XVIMAGESRC=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_XVIMAGESRC, test "x$GST_EXT_USE_EXT_XVIMAGESRC" = "xyes")
+
+AC_ARG_ENABLE(pcmdump, AC_HELP_STRING([--enable-pcmdump], [pcm dump]),
+  [
+    case "${enableval}" in
+      yes) PCM_DUMP_ENABLE=yes ;;
+      no)  PCM_DUMP_ENABLE=no ;;
+      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-pcmdump) ;;
+    esac
+  ],
+  [PCM_DUMP_ENABLE=no])
+AM_CONDITIONAL([PCM_DUMP_ENABLE], [test "x$PCM_DUMP_ENABLE" = "xyes"])
 
 dnl use ext-drmsrc --------------------------------------------------------------------------
 AC_ARG_ENABLE(ext-drmsrc, AC_HELP_STRING([--enable-ext-drmsrc], [using drmsrc]),
@@ -258,6 +373,28 @@ AC_ARG_ENABLE(ext-drmsrc, AC_HELP_STRING([--enable-ext-drmsrc], [using drmsrc]),
   ],
   [GST_EXT_USE_EXT_DRMSRC=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_DRMSRC, test "x$GST_EXT_USE_EXT_DRMSRC" = "xyes")
+
+if test "x$GST_EXT_USE_EXT_DRMSRC" = "xyes"; then
+	PKG_CHECK_MODULES(DRM_CLIENT, drm-client)
+	AC_SUBST(DRM_CLIENT_CFLAGS)
+	AC_SUBST(DRM_CLIENT_LIBS)
+	PKG_CHECK_MODULES(DRM_TRUSTED, drm-trusted)
+	AC_SUBST(DRM_TRUSTED_CFLAGS)
+	AC_SUBST(DRM_TRUSTED_LIBS)
+fi
+
+dnl use ext-submux --------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-submux, AC_HELP_STRING([--enable-ext-submux], [using submux]),
+  [
+    case "${enableval}" in
+      yes) GST_EXT_USE_EXT_SUBMUX=yes ;;
+      no)  GST_EXT_USE_EXT_SUBMUX=no ;;
+      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-submux) ;;
+    esac
+  ],
+  [GST_EXT_USE_EXT_SUBMUX=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_SUBMUX, test "x$GST_EXT_USE_EXT_SUBMUX" = "xyes")
+
 dnl use ext-toggle --------------------------------------------------------------------------
 AC_ARG_ENABLE(ext-toggle, AC_HELP_STRING([--enable-ext-toggle], [using toggle]),
   [
@@ -305,6 +442,39 @@ AC_ARG_ENABLE(ext-audiotp, AC_HELP_STRING([--enable-ext-audiotp], [using audiotp
  [GST_EXT_USE_EXT_AUDIOTP=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_AUDIOTP, test "x$GST_EXT_USE_EXT_AUDIOTP" = "xyes")
 
+dnl use ext-audioeq --------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-audioeq, AC_HELP_STRING([--enable-ext-audioeq], [using audioeq]),
+[
+ case "${enableval}" in
+         yes) GST_EXT_USE_EXT_AUDIOEQ=yes ;;
+         no)  GST_EXT_USE_EXT_AUDIOEQ=no ;;
+         *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-audioeq) ;;
+ esac
+ ],
+ [GST_EXT_USE_EXT_AUDIOEQ=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_AUDIOEQ, test "x$GST_EXT_USE_EXT_AUDIOEQ" = "xyes")
+
+dnl use ext-piffdemux --------------------------------------------------------------------------
+AC_ARG_ENABLE(ext-piffdemux, AC_HELP_STRING([--enable-ext-piffdemux], [using piffdemux]),
+[
+ case "${enableval}" in
+	 yes) GST_EXT_USE_EXT_PIFFDEMUX=yes ;;
+	 no)  GST_EXT_USE_EXT_PIFFDEMUX=no ;;
+	 *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-piffdemux) ;;
+ esac
+ ],
+ [GST_EXT_USE_EXT_PIFFDEMUX=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_PIFFDEMUX, test "x$GST_EXT_USE_EXT_PIFFDEMUX" = "xyes")
+
+#if test "x$GST_EXT_USE_EXT_PIFFDEMUX" = "xyes"; then
+#	PKG_CHECK_MODULES(DRM_CLIENT, drm-client)
+#	AC_SUBST(DRM_CLIENT_CFLAGS)
+#	AC_SUBST(DRM_CLIENT_LIBS)
+#	PKG_CHECK_MODULES(DRM_TRUSTED, drm-trusted)
+#	AC_SUBST(DRM_TRUSTED_CFLAGS)
+#	AC_SUBST(DRM_TRUSTED_LIBS)
+#fi
+
 dnl use ext-ssdemux --------------------------------------------------------------------------
 AC_ARG_ENABLE(ext-ssdemux, AC_HELP_STRING([--enable-ext-ssdemux], [using ssdemux]),
 [
@@ -317,25 +487,66 @@ AC_ARG_ENABLE(ext-ssdemux, AC_HELP_STRING([--enable-ext-ssdemux], [using ssdemux
  [GST_EXT_USE_EXT_SSDEMUX=yes])
 AM_CONDITIONAL(GST_EXT_USE_EXT_SSDEMUX, test "x$GST_EXT_USE_EXT_SSDEMUX" = "xyes")
 
+dnl use ext-dashdemux -----------------------------------------------------------------------
+AC_ARG_ENABLE(ext-dashdemux, AC_HELP_STRING([--enable-ext-dashdemux], [using dashdemux]),
+  [
+    case "${enableval}" in
+      yes) GST_EXT_USE_EXT_DASHDEMUX=yes ;;
+      no)  GST_EXT_USE_EXT_DASHDEMUX=no ;;
+      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-dashdemux) ;;
+    esac
+  ],
+  [GST_EXT_USE_EXT_DASHDEMUX=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_DASHDEMUX, test "x$GST_EXT_USE_EXT_DASHDEMUX" = "xyes")
+
+dnl use ext-hlsdemux2 -----------------------------------------------------------------------
+AC_ARG_ENABLE(ext-hlsdemux2, AC_HELP_STRING([--enable-ext-hlsdemux2], [using hlsdemux2]),
+  [
+    case "${enableval}" in
+      yes) GST_EXT_USE_EXT_HLSDEMUX2=yes ;;
+      no)  GST_EXT_USE_EXT_HLSDEMUX2=no ;;
+      *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ext-hlsdemux2) ;;
+    esac
+  ]
+  [GST_EXT_USE_EXT_HLSDEMUX2=yes])
+AM_CONDITIONAL(GST_EXT_USE_EXT_HLSDEMUX2, test "x$GST_EXT_USE_EXT_HLSDEMUX2" = "xyes")
+
+if test "x$GST_EXT_USE_EXT_HLSDEMUX2" = "xyes"; then                                                                       
+    dnl crypto for hlsdemux                                                                                                 
+    PKG_CHECK_MODULES(CRYPTO, libcrypto)                                                                                    
+    AC_SUBST(CRYPTO_CFLAGS)                                                                                                 
+    AC_SUBST(CRYPTO_LIBS)  
+fi
 
 AC_OUTPUT(
 Makefile
 common/Makefile
 common/m4/Makefile
-avsystem/Makefile
 pdpushsrc/Makefile
 pdpushsrc/src/Makefile
-avsystem/src/Makefile
 encodebin/Makefile
 encodebin/src/Makefile
 evasimagesink/Makefile
 evasimagesink/src/Makefile
+evaspixmapsink/Makefile
+xvimagesrc/Makefile
+xvimagesrc/src/Makefile
 toggle/Makefile
 toggle/src/Makefile
 drmsrc/Makefile
 drmsrc/src/Makefile
+submux/Makefile
+submux/src/Makefile
 audiotp/Makefile
 audiotp/src/Makefile
+audioeq/Makefile
+audioeq/src/Makefile
+piffdemux/Makefile
+piffdemux/src/Makefile
 ssdemux/Makefile
 ssdemux/src/Makefile
+dashdemux/Makefile
+dashdemux/src/Makefile
+hlsdemux2/Makefile
+hlsdemux2/src/Makefile
 )

@@ -69,72 +69,72 @@ struct _GstEncodeBin
   GMutex *mutex;
 
   /* pads */
-  GstPad              *srcpad;
-  GstPad              *video_sinkpad;
-  GstPad              *audio_sinkpad;
-  GstPad              *image_sinkpad;
-  GstPad              *mux_audio_sinkpad;
-  GstPad              *mux_video_sinkpad;
+  GstPad *srcpad;
+  GstPad *video_sinkpad;
+  GstPad *audio_sinkpad;
+  GstPad *image_sinkpad;
+  GstPad *mux_audio_sinkpad;
+  GstPad *mux_video_sinkpad;
 
   /* sinkpads, video first */
-  GSList              *sinkpads;
+  GSList *sinkpads;
 
   /* video restricted to 1 pad */
-  guint               video_pads, audio_pads;
+  guint video_pads, audio_pads;
 
-  gint		profile;
-  gint		fps;
-  gint		high_speed_fps; 
-  gint		multiple;  
-  gchar		*venc_name;
-  gchar		*aenc_name;
-  gchar		*ienc_name;  
-  gchar		*mux_name;
+  gint profile;
+  gint fps;
+  gint high_speed_fps;
+  gint multiple;
+  gchar *venc_name;
+  gchar *aenc_name;
+  gchar *ienc_name;
+  gchar *mux_name;
+  gchar *vconv_name;
 
+  GstCaps *vcaps;
+  GstCaps *acaps;
+  GstCaps *icaps;
 
-  GstCaps	*vcaps;
-  GstCaps	*acaps;
-  GstCaps	*icaps;
-  
-  gboolean	auto_audio_convert;
-  gboolean	auto_audio_resample;
-  gboolean	auto_color_space;
-  gboolean	block;
-  gboolean	pause;
-  gboolean	use_video_toggle;
-  gboolean	use_venc_queue;
-  gboolean	use_aenc_queue;  
-  
+  gboolean auto_audio_convert;
+  gboolean auto_audio_resample;
+  gboolean auto_color_space;
+  gboolean block;
+  gboolean pause;
+  gboolean use_video_toggle;
+  gboolean use_venc_queue;
+  gboolean use_aenc_queue;
+
   GstElement *audio_queue;
-  GstElement *video_queue;  
-  GstElement *video_encode_queue;    
-  GstElement *audio_encode_queue;      
-  GstElement *image_queue;    
-  
+  GstElement *video_queue;
+  GstElement *video_encode_queue;
+  GstElement *audio_encode_queue;
+  GstElement *image_queue;
+
   GstElement *audio_encode;
   GstElement *video_encode;
-  GstElement *image_encode;  
+  GstElement *image_encode;
 
-  GstElement *vcapsfilter;  
-  GstElement *acapsfilter;    
-  GstElement *icapsfilter;      
-  
+  GstElement *vcapsfilter;
+  GstElement *acapsfilter;
+  GstElement *icapsfilter;
+
   GstElement *video_toggle;
-  GstElement *image_toggle;  
-  GstElement *color_space;  
-  GstElement *audio_conv;  
+  GstElement *image_toggle;
+  GstElement *color_space;
+  GstElement *audio_conv;
   GstElement *audio_sample;
-  
+
   GstElement *mux;
 
   /* pause/resume variables */
-  GstClockTime 	paused_time;			/* pipeline time when pausing */
-  GstClockTime 	total_offset_time;		/* delayed time which is due to pause */
-  gulong 		vsink_probeid;
-  gulong 		vsink_hs_probeid;
-  gulong 		asink_probeid;
-  gulong		veque_sig_id;
-  gulong		aeque_sig_id;  
+  GstClockTime paused_time;             /* pipeline time when pausing */
+  GstClockTime total_offset_time;       /* delayed time which is due to pause */
+  gulong vsink_probeid;
+  gulong vsink_hs_probeid;
+  gulong asink_probeid;
+  gulong veque_sig_id;
+  gulong aeque_sig_id;
 };
 
 struct _GstEncodeBinClass

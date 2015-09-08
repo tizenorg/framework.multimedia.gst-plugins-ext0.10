@@ -14,14 +14,14 @@ plugin_LTLIBRARIES = libgstdrmsrc.la
 ##############################################################################
 
 # sources used to compile this plug-in
-libgstdrmsrc_la_SOURCES = gstdrmsrc.c
+libgstdrmsrc_la_SOURCES = gstdrmsrc.c drm_util.c
 
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
-libgstdrmsrc_la_CFLAGS = $(GST_CFLAGS) $(MMTA_CFLAGS) -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
-libgstdrmsrc_la_LIBADD = $(GST_LIBS) $(GST_BASE_LIBS) $(MMTA_LIBS)
+libgstdrmsrc_la_CFLAGS = $(GST_CFLAGS) $(DRM_CLIENT_CFLAGS) $(DRM_TRUSTED_CFLAGS) -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
+libgstdrmsrc_la_LIBADD = $(GST_LIBS) $(DRM_CLIENT_LIBS) $(DRM_TRUSTED_LIBS) $(GST_BASE_LIBS) 
 libgstdrmsrc_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
 
 # headers we need but don't want installed
-noinst_HEADERS = gstdrmsrc.h
+noinst_HEADERS = gstdrmsrc.h drm_util.h
 

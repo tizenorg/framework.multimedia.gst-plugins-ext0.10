@@ -104,11 +104,9 @@ static void
 gst_mytoggle_class_init (GstMytoggleClass * klass)
 {
   GObjectClass *gobject_class;
-  GstElementClass *gstelement_class;
   GstBaseTransformClass *gstbasetrans_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gstelement_class = GST_ELEMENT_CLASS (klass);
   gstbasetrans_class = GST_BASE_TRANSFORM_CLASS (klass);
 
   gobject_class->set_property = GST_DEBUG_FUNCPTR (gst_mytoggle_set_property);

@@ -121,9 +121,9 @@ gboolean gst_ssm_parse_manifest (GstSSMParse *parser, char *data, unsigned int s
 gboolean gst_ssm_parse_get_next_fragment_url (GstSSMParse *parser, SS_STREAM_TYPE stream_type, gchar **uri, guint64 *start_ts);
 gboolean gst_ssm_parse_append_next_fragment (GstSSMParse *parser, SS_STREAM_TYPE stream_type, guint64 timestamp, guint64 duration);
 GstCaps *ssm_parse_get_stream_caps (GstSSMParse *parser, SS_STREAM_TYPE stream_type);
-SS_BW_MODE
-gst_ssm_parse_switch_qualitylevel (GstSSMParse *parser, guint drate);
+SS_BW_MODE gst_ssm_parse_switch_qualitylevel (GstSSMParse *parser, guint drate);
 gboolean gst_ssm_parse_seek_manifest (GstSSMParse *parser, guint64 seek_time);
+gboolean gst_ssm_parse_get_protection_header (GstSSMParse *parser, unsigned char **protection_header, unsigned int *protection_header_len);
 G_END_DECLS
 #endif /* __SS_MANIFEST_PARSE_H__ */
 

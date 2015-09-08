@@ -30,7 +30,7 @@ int_from_string (gchar * ptr, gchar ** endptr, gint * val, gint base)
   errno = 0;
   *val = strtol (ptr, &end, base);
   if ((errno == ERANGE && (*val == LONG_MAX || *val == LONG_MIN)) || (errno != 0 && *val == 0)) {
-    g_print ("Error in strtol : %s\n", strerror(errno));
+    g_print ("Error in strtol : %s\n", g_strerror(errno));
     return FALSE;
   }
 
@@ -105,7 +105,7 @@ ssm_parse_get_xml_prop_uint64 (GstSSMParse *parser,
   }
 
   return prop_uint64;
-} 
+}
 
 static gint
 ssm_parser_sort_qualitylevels_by_bitrate (gconstpointer a, gconstpointer b)
@@ -235,6 +235,22 @@ gst_ssm_parse_free (GstSSMParse *parser)
 
 
 static gboolean
+gst_ssm_parse_confirm_audiotag(gchar ** fourcc, gint audio_tag)
+{
+  switch(audio_tag){
+    case 255:
+      *fourcc = (gchar *)strdup("AACL");
+      break;
+    case 353:
+      *fourcc = (gchar *)strdup("WMAP");
+      break;
+    default:
+      return FALSE;
+  }
+  return TRUE;
+}
+
+static gboolean
 ssm_parse_quality_node (GstSSMParse *parser, GstSSMStreamNode *stream, xmlNodePtr quality_node)
 {
   GstSSMQualityNode *quality_level = NULL;
@@ -326,19 +342,24 @@ ssm_parse_quality_node (GstSSMParse *parser, GstSSMStreamNode *stream, xmlNodePt
 
   /* MANDATORY for audio & video: parsing FourCC attribute */
   quality_level->fourcc = (gchar *)xmlGetProp(quality_node, (const xmlChar *) "FourCC");
+  if(!quality_level->fourcc && SS_STREAM_AUDIO == stream->type){
+    if(!gst_ssm_parse_confirm_audiotag(&quality_level->fourcc, quality_level->audio_tag)){
+      GST_ERROR ("failed to set fourcc from audio tag %d",quality_level->audio_tag);
+      return FALSE;
+    }
+  }
+
   if (!quality_level->fourcc && ((SS_STREAM_AUDIO == stream->type) || (SS_STREAM_VIDEO == stream->type))) {
     GST_ERROR ("failed to parse fourcc from quality node");
     return FALSE;
   }
 
-  if (!((!strncmp ((char *)quality_level->fourcc, "AACL", 4)) || !strncmp ((char *)quality_level->fourcc, "WMAP", 4) ||
+  if (quality_level->fourcc && !((!strncmp ((char *)quality_level->fourcc, "AACL", 4)) || !strncmp ((char *)quality_level->fourcc, "WMAP", 4) ||
   (!strncmp ((char *)quality_level->fourcc, "H264", 4)) || !strncmp ((char *)quality_level->fourcc, "WVC1", 4) ||
   (!strncmp ((char *)quality_level->fourcc, "TTML", 4)))) {
     GST_INFO ("Not a proper Fourcc Code...If possible take from SubType\n\n\n");
-    if (quality_level->fourcc) {
-      free (quality_level->fourcc);
-      quality_level->fourcc = NULL;
-    }
+    free (quality_level->fourcc);
+
     GST_DEBUG ("Subtype = %s\n\n",stream->StreamSubType);
     quality_level->fourcc = g_strdup (stream->StreamSubType);
     if (!((!strncmp ((char *)quality_level->fourcc, "AACL", 4)) || !strncmp ((char *)quality_level->fourcc, "WMAP", 4) ||
@@ -1059,9 +1080,11 @@ ssm_prepare_video_caps (GstSSMParse *parser, GstSSMStreamNode *stream)
                      NULL);
   }
 
-  GST_INFO ( "prepared video caps : %s\n", gst_caps_to_string(caps));
+  gchar *caps_name = gst_caps_to_string(caps);
+  GST_INFO ( "prepared video caps : %s\n", caps_name);
+  g_free(caps_name);
 
-   return caps;
+  return caps;
 }
 
 GstCaps *
@@ -1071,8 +1094,10 @@ ssm_prepare_audio_caps (GstSSMParse *parser, GstSSMStreamNode *stream)
   GstBuffer *codec_data = NULL;
   GstCaps *caps = NULL;
 
-  if ((!strncmp ((char *)cur_quality_node->fourcc, "AACL", 4)) || !strncmp ((char *)cur_quality_node->fourcc, "WMAP", 4)) {
+  if (cur_quality_node->codec_data &&
+     ((!strncmp ((char *)cur_quality_node->fourcc, "AACL", 4)) || !strncmp ((char *)cur_quality_node->fourcc, "WMAP", 4))) {
     guint DCI_len = strlen ((char *)cur_quality_node->codec_data);
+    gchar *dci = cur_quality_node->codec_data;
     gchar tmp[3] = {0, };
     gint val = 0;
     gint codec_data_len = (DCI_len >>1);
@@ -1087,14 +1112,14 @@ ssm_prepare_audio_caps (GstSSMParse *parser, GstSSMStreamNode *stream)
     /* copy codec data */
     while (DCI_len) {
       memset (tmp, 0x00, 3);
-      strncpy ((char*)tmp, (char*)cur_quality_node->codec_data, 2);
+      strncpy ((char*)tmp, (char*)dci, 2);
       tmp[2] = '\0';
       if (!int_from_string ((char*)tmp, NULL, &val , 16)) {
         GST_ERROR ("Failed to int from string...");
         return NULL;
       }
       (GST_BUFFER_DATA(codec_data))[idx] = val;
-      cur_quality_node->codec_data += 2;
+      dci += 2;
       DCI_len = DCI_len - 2;
       //g_print ("val = 0x%02x, codec_data_length = %d, idx = %d\n", val, DCI_len, idx);
       idx++;
@@ -1111,6 +1136,7 @@ ssm_prepare_audio_caps (GstSSMParse *parser, GstSSMStreamNode *stream)
                           "stream-format", G_TYPE_STRING, "raw",
                           "rate", G_TYPE_INT, (int) cur_quality_node->samplingrate,
                           "channels", G_TYPE_INT, cur_quality_node->channels,
+                          "codec_data", GST_TYPE_BUFFER, codec_data,
                           NULL);
   } else if (!strncmp ((char *)cur_quality_node->fourcc, "WMAP", 4)) {
     caps = gst_caps_new_simple ("audio/x-wma",
@@ -1127,7 +1153,9 @@ ssm_prepare_audio_caps (GstSSMParse *parser, GstSSMStreamNode *stream)
                              "channels", G_TYPE_INT, cur_quality_node->channels,
                              NULL);
   }
-  GST_INFO ( "prepared video caps : %s\n", gst_caps_to_string(caps));
+  gchar *caps_name = gst_caps_to_string(caps);
+  GST_INFO ( "prepared video caps : %s\n", caps_name);
+  g_free(caps_name);
 
   return caps;
 }
@@ -1152,6 +1180,7 @@ gst_ssm_parse_switch_qualitylevel (GstSSMParse *parser, guint drate)
       stream->quality_lists = g_list_next (stream->quality_lists);
       g_print ("Move to next quality level : drate = %d and bitrate = %d\n", drate, ((GstSSMQualityNode *)stream->quality_lists->data)->bitrate);
       ret = SS_MODE_AV;
+      bitrate = ((GstSSMQualityNode *)stream->quality_lists->data)->bitrate;
     } else {
       g_print ("Already at MAX Bitrate possible...\n");
       ret = SS_MODE_NO_SWITCH;
@@ -1164,6 +1193,7 @@ gst_ssm_parse_switch_qualitylevel (GstSSMParse *parser, guint drate)
     if (g_list_previous (stream->quality_lists)) {
       stream->quality_lists = g_list_previous (stream->quality_lists);
       g_print ("Move to previous quality level : drate = %d and bitrate = %d\n", drate, ((GstSSMQualityNode *)stream->quality_lists->data)->bitrate);
+      bitrate = ((GstSSMQualityNode *)stream->quality_lists->data)->bitrate;
     } else {
       g_print ("Reached MIN video bitrate possible...\n");
       if (GST_SSM_PARSE_IS_LIVE_PRESENTATION(parser)) {
@@ -1271,25 +1301,30 @@ gst_ssm_parse_seek_manifest (GstSSMParse *parser, guint64 seek_time)
         /* forward seek */
         while (seek_time > stream_time) {
           stream->fragment_lists = g_list_next (stream->fragment_lists);
-          stream_time = gst_util_uint64_scale (((GstSSMFragmentNode *)stream->fragment_lists->data)->time, GST_SECOND,
+          if(stream->fragment_lists && stream->fragment_lists->data) {
+            stream_time = gst_util_uint64_scale (((GstSSMFragmentNode *)stream->fragment_lists->data)->time, GST_SECOND,
               GST_SSM_PARSE_GET_TIMESCALE(parser));
-          GST_LOG ("seek time = %"GST_TIME_FORMAT", cur_time = %"GST_TIME_FORMAT,
+            GST_LOG ("seek time = %"GST_TIME_FORMAT", cur_time = %"GST_TIME_FORMAT,
               GST_TIME_ARGS(seek_time), GST_TIME_ARGS(stream_time));
+          }
         }
 
         /* moving to fragment before our seeked time */
         stream->fragment_lists = g_list_previous (stream->fragment_lists);
-        start_ts = ((GstSSMFragmentNode *)stream->fragment_lists->data)->time;
+        if(stream->fragment_lists && stream->fragment_lists->data)
+          start_ts = ((GstSSMFragmentNode *)stream->fragment_lists->data)->time;
       } else if (seek_time < stream_time) {
         /* backward seek */
         while (seek_time < stream_time) {
           stream->fragment_lists = g_list_previous (stream->fragment_lists);
-          stream_time = gst_util_uint64_scale (((GstSSMFragmentNode *)stream->fragment_lists->data)->time, GST_SECOND,
+          if(stream->fragment_lists && stream->fragment_lists->data) {
+            stream_time = gst_util_uint64_scale (((GstSSMFragmentNode *)stream->fragment_lists->data)->time, GST_SECOND,
                                               GST_SSM_PARSE_GET_TIMESCALE(parser));
-          GST_LOG ("seek time = %"GST_TIME_FORMAT", cur_time = %"GST_TIME_FORMAT,
-          GST_TIME_ARGS(seek_time), GST_TIME_ARGS(stream_time));
+            GST_LOG ("seek time = %"GST_TIME_FORMAT", cur_time = %"GST_TIME_FORMAT,
+              GST_TIME_ARGS(seek_time), GST_TIME_ARGS(stream_time));
+            start_ts = ((GstSSMFragmentNode *)stream->fragment_lists->data)->time;
+          }
         }
-        start_ts = ((GstSSMFragmentNode *)stream->fragment_lists->data)->time;
       } else {
         /* rare case */
         start_ts = ((GstSSMFragmentNode *)stream->fragment_lists->data)->time;
@@ -1309,6 +1344,29 @@ gst_ssm_parse_seek_manifest (GstSSMParse *parser, guint64 seek_time)
   }
 
   GST_INFO ("ns_start = %"G_GUINT64_FORMAT, parser->ns_start);
+
+  return TRUE;
+}
+
+gboolean
+gst_ssm_parse_get_protection_header (GstSSMParse *parser, unsigned char **protection_header, unsigned int *protection_header_len)
+{
+  if (!parser->RootNode->ProtectNode) {
+    *protection_header = NULL;
+    *protection_header_len = 0;
+    return TRUE;
+  }
+
+  if (parser->RootNode->ProtectNode->ContentSize && parser->RootNode->ProtectNode->Content) {
+    *protection_header = g_malloc0 (parser->RootNode->ProtectNode->ContentSize);
+    if (*protection_header == NULL) {
+      GST_ERROR ("failed to allocate memory...");
+      return FALSE;
+    }
+
+    memcpy (*protection_header, parser->RootNode->ProtectNode->Content, parser->RootNode->ProtectNode->ContentSize);
+    *protection_header_len = parser->RootNode->ProtectNode->ContentSize;
+  }
 
   return TRUE;
 }
@@ -1604,4 +1662,7 @@ exit:
 	return bret;
 #endif
 }
+
+
+
 

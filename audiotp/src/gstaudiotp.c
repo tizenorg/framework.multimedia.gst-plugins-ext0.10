@@ -517,6 +517,7 @@ send_reverse:
     return GST_FLOW_OK;
   }
 
+#if 0
 send_dummy:
   {
 
@@ -532,6 +533,7 @@ send_dummy:
     }
     return GST_FLOW_OK;
   }
+#endif
 
 error_exit:
 

@@ -1,19 +1,33 @@
 Name:       gst-plugins-ext0.10
-Version:     0.2.4
-Summary:  GStreamer extra plugins (common)
-Release:    1
-Group:      TO_BE/FILLED_IN
-License:    TO BE FILLED IN
+Version:    0.4.88
+Summary:    GStreamer extra plugins (common)
+Release:    0
+Group:      libs
+License:    LGPL-2.1+
 Source0:    %{name}-%{version}.tar.gz
-BuildRequires:  pkgconfig(avsysaudio)
 BuildRequires:  pkgconfig(camsrcjpegenc)
+#BuildRequires:  pkgconfig(drm-client)
+#BuildRequires:  pkgconfig(drm-trusted)
 BuildRequires:  pkgconfig(ecore)
 BuildRequires:  pkgconfig(ecore-x)
 BuildRequires:  pkgconfig(evas)
-BuildRequires:  pkgconfig(mm-ta)
+BuildRequires:  gst-plugins-base-devel 
 BuildRequires:  pkgconfig(gstreamer-plugins-base-0.10)
-BuildRequires:  pkgconfig(gstreamer-0.10)  
+BuildRequires:  pkgconfig(gstreamer-0.10)
 BuildRequires:  pkgconfig(libexif)
+BuildRequires:  pkgconfig(libxml-2.0)
+BuildRequires:	pkgconfig(libdri2)
+BuildRequires:	pkgconfig(x11)
+BuildRequires:	pkgconfig(xext)
+BuildRequires:	pkgconfig(xv)
+BuildRequires:	pkgconfig(xdamage)
+BuildRequires:	pkgconfig(libdrm)
+BuildRequires:  pkgconfig(libtbm)
+BuildRequires:	pkgconfig(dri2proto)
+BuildRequires:	pkgconfig(xfixes)
+BuildRequires:	pkgconfig(libtbm)
+BuildRequires:  pkgconfig(vconf)
+BuildRequires:  pkgconfig(libcrypto)
 
 %description
 GStreamer extra plugins (common)
@@ -23,18 +37,31 @@ GStreamer extra plugins (common)
 
 
 %build
-export CFLAGS+=" -DGST_EXT_TIME_ANALYSIS -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" "
+export CFLAGS+=" -DCONTROL_PAGECACHE -DGST_EXT_TIME_ANALYSIS -DEXPORT_API=\"__attribute__((visibility(\\\"default\\\")))\" "
 
 ./autogen.sh --disable-static
-%configure --disable-static
+%configure --disable-static \
+ --enable-ext-hlsdemux2\
+ --disable-ext-drmsrc\
+%if 0%{?tizen_build_binary_release_type_eng}
+ --enable-pcmdump
+%endif
 
 make %{?jobs:-j%jobs}
 
 %install
 rm -rf %{buildroot}
+mkdir -p %{buildroot}/usr/share/license
+cp COPYING %{buildroot}/usr/share/license/%{name}
 %make_install
-
+mkdir -p %{buildroot}/usr/etc/
+install -m 755 hlsdemux2/predefined_frame/* %{buildroot}/usr/etc/
 
 %files
-%defattr(-,root,root,-)  
+%manifest gst-plugins-ext0.10.manifest
+%defattr(-,root,root,-)
 %{_libdir}/gstreamer-0.10/*.so
+/usr/share/license/%{name}
+/usr/etc/blackframe_QVGA.264
+/usr/etc/sec_audio_fixed_qvga.264
+/usr/etc/sec_audio_fixed_qvga.jpg

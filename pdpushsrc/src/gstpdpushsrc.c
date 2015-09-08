@@ -166,14 +166,14 @@ gst_pd_pushsrc_class_init (GstPDPushSrcClass * klass)
           "Location of the file to read", NULL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
-   
+
     g_object_class_install_property (gobject_class, ARG_EOS,
                                     g_param_spec_boolean ("eos",
                                         "EOS recived on downloading pipeline",
                                         "download of clip is over",
                                         0,
                                         G_PARAM_READWRITE));
-   
+
   gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_pd_pushsrc_start);
   gstbasesrc_class->stop = GST_DEBUG_FUNCPTR (gst_pd_pushsrc_stop);
   gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR (gst_pd_pushsrc_is_seekable);
@@ -187,7 +187,7 @@ gst_pd_pushsrc_class_init (GstPDPushSrcClass * klass)
   }
 
   GST_LOG ("OUT");
- 
+
 }
 
 static void
@@ -201,7 +201,7 @@ gst_pd_pushsrc_init (GstPDPushSrc * src, GstPDPushSrcClass * g_class)
   src->uri = NULL;
   src->is_regular = FALSE;
   src->is_eos = FALSE;
-  
+
   gst_pad_set_checkgetrange_function (basesrc->srcpad, GST_DEBUG_FUNCPTR (gst_pd_pushsrc_checkgetrange));
 
   GST_LOG ("OUT");
@@ -255,7 +255,7 @@ gst_pd_pushsrc_set_location (GstPDPushSrc * src, const gchar * location)
   }
   g_object_notify (G_OBJECT (src), "location");
   gst_uri_handler_new_uri (GST_URI_HANDLER (src), src->uri);
-  
+
   GST_LOG ("OUT");
 
   return TRUE;
@@ -328,17 +328,20 @@ gst_pd_pushsrc_create_read (GstBaseSrc * basesrc, guint64 offset, guint length, 
   GST_LOG ("IN");
 
   int ret;
-  GstBuffer *buf;
+  GstBuffer *buf = NULL;
   struct stat stat_results;
   GstPDPushSrc *src;
 
+  if(length < 1)
+    return GST_FLOW_ERROR;
+
   src = GST_PD_PUSHSRC_CAST (basesrc);
-  
-  GST_LOG_OBJECT (src, "read position = %"G_GUINT64_FORMAT ", offset = %"G_GUINT64_FORMAT", length = %d", 
-  	src->read_position, offset, length);
-  
+
+  GST_LOG_OBJECT (src, "read position = %"G_GUINT64_FORMAT ", offset = %"G_GUINT64_FORMAT", length = %d",
+    src->read_position, offset, length);
+
   memset (&stat_results, 0, sizeof (stat_results));
-  
+
   if (fstat (src->fd, &stat_results) < 0)
     goto could_not_stat;
 
@@ -363,9 +366,9 @@ gst_pd_pushsrc_create_read (GstBaseSrc * basesrc, guint64 offset, guint length, 
     GST_DEBUG_OBJECT (src, "Going to wait for %ld msec", timeout.tv_usec);
 
     ret = select (src->fd + 1, &fds, NULL, NULL, &timeout);
-    if (-1 == ret) 
+    if (-1 == ret)
     {
-      GST_ERROR_OBJECT (src, "ERROR in select () : reason - %s...\n", strerror(errno));
+      GST_ERROR_OBJECT (src, "ERROR in select () : reason - %s...\n", g_strerror(errno));
       return GST_FLOW_ERROR;
     }
     else if (0 == ret)
@@ -375,7 +378,7 @@ gst_pd_pushsrc_create_read (GstBaseSrc * basesrc, guint64 offset, guint length, 
     else
     {
       memset (&stat_results, 0, sizeof (stat_results));
-  
+
       if (fstat (src->fd, &stat_results) < 0)
         goto could_not_stat;
 
@@ -402,36 +405,33 @@ gst_pd_pushsrc_create_read (GstBaseSrc * basesrc, guint64 offset, guint length, 
       goto seek_failed;
     src->read_position = offset;
   }
-  
+
   buf = gst_buffer_try_new_and_alloc (length);
-  if (G_UNLIKELY (buf == NULL && length > 0)) {
+  if (G_UNLIKELY (buf == NULL)) {
     GST_ERROR_OBJECT (src, "Failed to allocate %u bytes", length);
     return GST_FLOW_ERROR;
   }
 
-  /* No need to read anything if length is 0 */
-  if (length > 0) {
-    GST_LOG_OBJECT (src, "Reading %d bytes at offset 0x%" G_GINT64_MODIFIER "x",
-        length, offset);
-    ret = read (src->fd, GST_BUFFER_DATA (buf), length);
-    if (G_UNLIKELY (ret < 0))
-      goto could_not_read;
+  GST_LOG_OBJECT (src, "Reading %d bytes at offset 0x%" G_GINT64_MODIFIER "x",
+      length, offset);
+  ret = read (src->fd, GST_BUFFER_DATA (buf), length);
+  if (G_UNLIKELY (ret < 0))
+    goto could_not_read;
 
-    /* seekable regular files should have given us what we expected */
-    if (G_UNLIKELY ((guint) ret < length && src->seekable))
-      goto unexpected_eos;
+  /* seekable regular files should have given us what we expected */
+  if (G_UNLIKELY ((guint) ret < length && src->seekable))
+    goto unexpected_eos;
 
-    /* other files should eos if they read 0 and more was requested */
-    if (G_UNLIKELY (ret == 0 && length > 0))
-      goto eos;
+  /* other files should eos if they read 0 and more was requested */
+  if (G_UNLIKELY (ret == 0 && length > 0))
+    goto eos;
 
-    length = ret;
-    GST_BUFFER_SIZE (buf) = length;
-    GST_BUFFER_OFFSET (buf) = offset;
-    GST_BUFFER_OFFSET_END (buf) = offset + length;
+  length = ret;
+  GST_BUFFER_SIZE (buf) = length;
+  GST_BUFFER_OFFSET (buf) = offset;
+  GST_BUFFER_OFFSET_END (buf) = offset + length;
 
-    src->read_position += length;
-  }
+  src->read_position += length;
 
   *buffer = buf;
   GST_LOG ("OUT");
@@ -461,15 +461,15 @@ could_not_read:
 unexpected_eos:
   {
     GST_ERROR_OBJECT (src, "Unexpected EOS occured...");
-    GST_ELEMENT_ERROR (src, RESOURCE, READ, (NULL),
-        ("unexpected end of file."));
+    GST_ELEMENT_ERROR (src, RESOURCE, READ, (NULL), ("unexpected end of file."));
     gst_buffer_unref (buf);
     return GST_FLOW_ERROR;
   }
 eos:
   {
     GST_ERROR_OBJECT (src, "non-regular file hits EOS");
-    gst_buffer_unref (buf);
+    if (buf)
+      gst_buffer_unref (buf);
     return GST_FLOW_UNEXPECTED;
   }
 }
@@ -562,7 +562,7 @@ gst_pd_pushsrc_get_size (GstBaseSrc * basesrc, guint64 * size)
   *size = G_MAXUINT64;
 
   GST_DEBUG ("size of the file = %"G_GUINT64_FORMAT, *size);
-  
+
   GST_LOG ("OUT");
 
   return TRUE;
@@ -658,7 +658,7 @@ open_failed:
   }
 no_stat:
   {
-    GST_ERROR_OBJECT (src, "Could not get stat info...");	
+    GST_ERROR_OBJECT (src, "Could not get stat info...");
     GST_ELEMENT_ERROR (src, RESOURCE, OPEN_READ,
         ("Could not get info on \"\"."),  (NULL));
     close (src->fd);
@@ -674,7 +674,7 @@ was_directory:
   }
 was_socket:
   {
-   GST_ERROR_OBJECT (src, "Is a Socket");	
+   GST_ERROR_OBJECT (src, "Is a Socket");
     GST_ELEMENT_ERROR (src, RESOURCE, OPEN_READ,
         ("File \"\" is a socket."), (NULL));
     close (src->fd);
@@ -772,7 +772,7 @@ gst_pd_pushsrc_uri_set_uri (GstURIHandler * handler, const gchar * uri)
 #ifdef G_OS_WIN32
   /* Unfortunately, g_filename_from_uri() doesn't handle some UNC paths
    * correctly on windows, it leaves them with an extra backslash
-   * at the start if they're of the mozilla-style file://///host/path/file 
+   * at the start if they're of the mozilla-style file://///host/path/file
    * form. Correct this.
    */
   if (location[0] == '\\' && location[1] == '\\' && location[2] == '\\')

@@ -40,17 +40,18 @@ struct _GstSSDemux
   /* Properties */
   gchar **cookies;             /* HTTP request cookies. */
   gboolean allow_audio_only;  /*In LIVE case, allow audio only download when downloadrate is less */
-  guint fragments_cache;        /* number of fragments needed to be cached to start playing */
+  guint64 max_cache_time;
   gfloat bitrate_switch_tol;    /* tolerance with respect to the fragment duration to switch the bitarate*/
-  gboolean need_cache;
-  gboolean cancelled;
-  guint download_rate;
   GstBuffer *manifest;
   GstSSMParse *parser; /* manifest parser */
-
+  gint percent;
+  gint low_percent;
+  gint high_percent;
+  gboolean eos;
   GstSSDemuxStream *streams[SS_STREAM_NUM];
   SS_BW_MODE ss_mode;
   gboolean switch_eos;
+  GstBuffer *protection_header;
 };
 
 struct _GstSSDemuxClass
